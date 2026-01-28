@@ -1,47 +1,42 @@
 @echo off
-chcp 65001 > nul
+chcp 65001 >nul 2>&1
 title PartMart Boost Launcher
 color 0C
 echo.
-echo  ██████╗ ██████╗ ███████╗███████╗██╗   ██╗ ██████╗ ███████╗
-echo  ██╔════╝██╔═══██╗██╔════╝╚══██╔══╝██║██╔╝ ██╔═══██╗██╔════╝
-echo  ██║     ███████║███████╗   ██║   █████╔╝ ███████║███████╗
-echo  ██║     ██╔══██║██╔═══╝    ██║   ██╔═██╗ ██╔══██║╚════██║
-echo  ╚██████╗██║  ██║██║        ██║   ██║ ╚██╗██║  ██║███████║
-echo  ╚═════╝╚═╝  ╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+echo ========================================================
 echo.
-echo         🐉 PartMart Boost v0.2-alpha Launcher
-echo         Твой ПК. Твоя мощь.
+echo           PartMart Boost v0.3-alpha Launcher
+echo           Your PC. Your Power.
 echo.
-echo  ========================================================
+echo ========================================================
 echo.
 
 REM Check Python
-echo  [✓] Проверка Python...
+echo [*] Checking Python...
 python --version >nul 2>&1
 if errorlevel 1 (
     color 0C
     echo.
-    echo  [✗] CRITICAL: Python не найден!
+    echo [X] CRITICAL: Python not found!
     echo.
-    echo  Установите Python 3.11+ с:
-    echo  https://www.python.org/downloads/
+    echo Install Python 3.11+ from:
+    echo https://www.python.org/downloads/
     echo.
-    echo  Важно: при установке отметьте "Add Python to PATH"
+    echo IMPORTANT: Check "Add Python to PATH" during installation
     echo.
     pause
     exit /b 1
 )
 
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VER=%%i
-echo  [✓] Python %PYTHON_VER% обнаружен
+echo [+] Python %PYTHON_VER% detected
 echo.
 
 REM Check dependencies
-echo  [✓] Проверка зависимостей...
+echo [*] Checking dependencies...
 python -c "import PyQt6" >nul 2>&1
 if errorlevel 1 (
-    echo  [→] Установка зависимостей...
+    echo [*] Installing dependencies...
     echo.
     python -m pip install --upgrade pip
     python -m pip install -r requirements.txt
@@ -49,28 +44,28 @@ if errorlevel 1 (
     if errorlevel 1 (
         color 0C
         echo.
-        echo  [✗] ERROR: Ошибка установки зависимостей!
+        echo [X] ERROR: Failed to install dependencies!
         echo.
-        echo  Попробуйте вручную:
-        echo  pip install -r requirements.txt
+        echo Try manually:
+        echo pip install -r requirements.txt
         echo.
         pause
         exit /b 1
     )
     
     echo.
-    echo  [✓] Зависимости установлены!
+    echo [+] Dependencies installed!
 ) else (
-    echo  [✓] Зависимости уже установлены
+    echo [+] Dependencies already installed
 )
 
 echo.
-echo  ========================================================
+echo ========================================================
 echo.
 color 0A
-echo  🚀 ЗАПУСК PartMart Boost...
+echo [*] Launching PartMart Boost...
 echo.
-echo  ========================================================
+echo ========================================================
 echo.
 
 REM Launch app
@@ -80,21 +75,21 @@ set ERROR_CODE=%ERRORLEVEL%
 if %ERROR_CODE% neq 0 (
     color 0C
     echo.
-    echo  ========================================================
+    echo ========================================================
     echo.
-    echo  [✗] ОШИБКА ЗАПУСКА (Error code: %ERROR_CODE%)
+    echo [X] LAUNCH ERROR (Error code: %ERROR_CODE%)
     echo.
-    echo  Проверьте логи выше и создайте issue на GitHub:
-    echo  https://github.com/vitorpixel-6436/partmart-boost/issues
+    echo Check logs above and create issue on GitHub:
+    echo https://github.com/vitorpixel-6436/partmart-boost/issues
     echo.
-    echo  ========================================================
+    echo ========================================================
     echo.
     pause
     exit /b %ERROR_CODE%
 ) else (
     color 0A
     echo.
-    echo  [✓] Приложение закрыто корректно
+    echo [+] Application closed correctly
     timeout /t 2 /nobreak >nul
     exit /b 0
 )
