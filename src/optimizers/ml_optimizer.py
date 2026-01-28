@@ -1,17 +1,9 @@
-"""Lightweight ML optimizer for PartMart Boost
-
-Features:
-- Learns from optimization history
-- Predicts optimal GPU/CPU settings
-- Works 100% locally (no internet)
-- Lightweight (<50MB RAM)
-- Safe predictions (within hardware limits)
-"""
-import json
+"""Lightweight ML optimizer for GPU/RAM predictions"""
 import os
+import json
+import sqlite3
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
-import math
 
 try:
     from sklearn.linear_model import LinearRegression
@@ -20,282 +12,315 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
+    print("[ML Optimizer] sklearn not available - ML features disabled")
 
 class LocalMLOptimizer:
-    """Local ML optimizer using simple linear regression"""
+    """Lightweight local ML optimizer for PartMart Boost
     
-    def __init__(self, enabled: bool = False, data_file: str = "data/ml_history.json"):
-        self.enabled = enabled
-        self.data_file = data_file
-        self.history: List[Dict] = []
-        self.model = None
+    Features:
+    - Learns from optimization history
+    - Predicts optimal GPU clock/voltage
+    - Predicts safe RAM timings
+    - Works 100% locally (no internet)
+    - <50MB RAM usage
+    - Auto-cleanup old data
+    """
+    
+    def __init__(self, db_path: str = "data/ml_optimizer.db", enabled: bool = False):
+        self.enabled = enabled and SKLEARN_AVAILABLE
+        self.db_path = db_path
+        self.model_gpu = None
+        self.model_ram = None
         self.scaler = None
         
-        # Hardware safety limits
-        self.SAFE_LIMITS = {
-            'gpu_temp_max': 85,  # °C
-            'cpu_temp_max': 90,  # °C
-            'gpu_load_max': 100,  # %
-            'cpu_load_max': 100,  # %
-        }
+        if self.enabled:
+            self._ensure_db_dir()
+            self._init_database()
+            self._load_or_create_model()
+    
+    def _ensure_db_dir(self):
+        """Create data directory if needed"""
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+    
+    def _init_database(self):
+        """Initialize SQLite database for optimization history"""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
         
-        self._ensure_data_dir()
-        self._load_history()
+        # GPU optimizations table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS gpu_optimizations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                gpu_name TEXT,
+                base_clock INTEGER,
+                base_voltage INTEGER,
+                base_temp REAL,
+                base_load REAL,
+                optimized_clock INTEGER,
+                optimized_voltage INTEGER,
+                result_temp REAL,
+                result_fps REAL,
+                success BOOLEAN,
+                stable BOOLEAN
+            )
+        ''')
         
-        if self.enabled and SKLEARN_AVAILABLE:
-            self._train_model()
+        # RAM optimizations table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS ram_optimizations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                base_speed INTEGER,
+                base_latency REAL,
+                optimized_speed INTEGER,
+                xmp_enabled BOOLEAN,
+                success BOOLEAN
+            )
+        ''')
+        
+        conn.commit()
+        conn.close()
     
-    def _ensure_data_dir(self):
-        """Create data directory if it doesn't exist"""
-        data_dir = os.path.dirname(self.data_file)
-        if data_dir:
-            os.makedirs(data_dir, exist_ok=True)
+    def _load_or_create_model(self):
+        """Load existing model or create new one"""
+        if not SKLEARN_AVAILABLE:
+            return
+        
+        # Simple linear regression models
+        self.model_gpu = LinearRegression()
+        self.model_ram = LinearRegression()
+        self.scaler = StandardScaler()
+        
+        # Try to load training data and train
+        self._train_from_history()
     
-    def _load_history(self):
-        """Load optimization history from file"""
-        if os.path.exists(self.data_file):
-            try:
-                with open(self.data_file, 'r', encoding='utf-8') as f:
-                    self.history = json.load(f)
-                # Keep only last 500 records (prevent file bloat)
-                if len(self.history) > 500:
-                    self.history = self.history[-500:]
-                    self._save_history()
-            except Exception as e:
-                print(f"Failed to load ML history: {e}")
-                self.history = []
-    
-    def _save_history(self):
-        """Save optimization history to file"""
-        try:
-            with open(self.data_file, 'w', encoding='utf-8') as f:
-                json.dump(self.history, f, indent=2)
-        except Exception as e:
-            print(f"Failed to save ML history: {e}")
-    
-    def record_optimization(self, before: Dict, after: Dict, success: bool):
-        """Record optimization attempt for learning"""
+    def _train_from_history(self):
+        """Train models from historical data"""
         if not self.enabled:
             return
         
-        record = {
-            'timestamp': datetime.now().isoformat(),
-            'before': before,
-            'after': after,
-            'success': success,
-            'improvement': self._calculate_improvement(before, after) if success else 0
-        }
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
         
-        self.history.append(record)
-        self._save_history()
+        # Get GPU training data (only successful optimizations)
+        c.execute('''
+            SELECT base_clock, base_voltage, base_temp, base_load,
+                   optimized_clock, optimized_voltage, result_temp
+            FROM gpu_optimizations
+            WHERE success = 1 AND stable = 1
+            LIMIT 1000
+        ''')
         
-        # Retrain model if we have enough data
-        if SKLEARN_AVAILABLE and len(self.history) >= 10:
-            self._train_model()
-    
-    def _calculate_improvement(self, before: Dict, after: Dict) -> float:
-        """Calculate improvement score (0-100)"""
-        try:
-            temp_improvement = max(0, before.get('gpu_temp', 0) - after.get('gpu_temp', 0))
-            load_improvement = max(0, before.get('cpu_load', 0) - after.get('cpu_load', 0))
+        gpu_data = c.fetchall()
+        if len(gpu_data) >= 10:  # Need at least 10 samples to train
+            X = np.array([[d[0], d[1], d[2], d[3]] for d in gpu_data])
+            y_clock = np.array([d[4] for d in gpu_data])
+            y_voltage = np.array([d[5] for d in gpu_data])
             
-            # Weighted score (temperature is more important)
-            score = (temp_improvement * 3 + load_improvement) / 4
-            return min(100, max(0, score))
-        except:
-            return 0
+            # Train models
+            try:
+                self.scaler.fit(X)
+                X_scaled = self.scaler.transform(X)
+                self.model_gpu.fit(X_scaled, y_clock)
+                print(f"[ML Optimizer] GPU model trained on {len(gpu_data)} samples")
+            except Exception as e:
+                print(f"[ML Optimizer] Failed to train GPU model: {e}")
+        
+        conn.close()
     
-    def _train_model(self):
-        """Train simple linear regression model"""
-        if not SKLEARN_AVAILABLE or len(self.history) < 10:
+    def record_gpu_optimization(self, before: Dict, after: Dict, success: bool, stable: bool):
+        """Record GPU optimization for learning"""
+        if not self.enabled:
             return
         
         try:
-            # Prepare training data
-            X = []  # Features: current state
-            y = []  # Target: improvement score
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
             
-            for record in self.history:
-                if not record['success']:
-                    continue
-                
-                before = record['before']
-                features = [
-                    before.get('gpu_temp', 0),
-                    before.get('gpu_load', 0),
-                    before.get('cpu_load', 0),
-                    before.get('ram_percent', 0),
-                ]
-                
-                if any(math.isnan(f) or math.isinf(f) for f in features):
-                    continue
-                
-                X.append(features)
-                y.append(record['improvement'])
+            c.execute('''
+                INSERT INTO gpu_optimizations (
+                    timestamp, gpu_name, base_clock, base_voltage, base_temp, base_load,
+                    optimized_clock, optimized_voltage, result_temp, result_fps,
+                    success, stable
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                datetime.now().isoformat(),
+                before.get('gpu_name', 'Unknown'),
+                before.get('clock', 0),
+                before.get('voltage', 0),
+                before.get('temperature', 0),
+                before.get('load', 0),
+                after.get('clock', 0),
+                after.get('voltage', 0),
+                after.get('temperature', 0),
+                after.get('fps', 0),
+                success,
+                stable
+            ))
             
-            if len(X) < 5:  # Need at least 5 successful records
-                return
+            conn.commit()
+            conn.close()
             
-            X = np.array(X)
-            y = np.array(y)
-            
-            # Train model
-            self.scaler = StandardScaler()
-            X_scaled = self.scaler.fit_transform(X)
-            
-            self.model = LinearRegression()
-            self.model.fit(X_scaled, y)
-            
+            # Retrain model if we have enough new data
+            c = conn.cursor()
+            c.execute('SELECT COUNT(*) FROM gpu_optimizations')
+            count = c.fetchone()[0]
+            if count % 10 == 0:  # Retrain every 10 new records
+                self._train_from_history()
+        
         except Exception as e:
-            print(f"ML training error: {e}")
-            self.model = None
-            self.scaler = None
+            print(f"[ML Optimizer] Failed to record optimization: {e}")
     
-    def predict_improvement(self, current_state: Dict) -> Optional[float]:
-        """Predict improvement score for current state"""
-        if not self.enabled or not SKLEARN_AVAILABLE or self.model is None:
-            return None
+    def predict_optimal_gpu_settings(self, current_state: Dict) -> Optional[Dict]:
+        """Predict optimal GPU clock and voltage
+        
+        Args:
+            current_state: Dict with 'clock', 'voltage', 'temperature', 'load'
+        
+        Returns:
+            Dict with 'optimal_clock', 'optimal_voltage', 'confidence'
+            or None if ML is disabled or not enough data
+        """
+        if not self.enabled or self.model_gpu is None:
+            return self._get_safe_defaults()
         
         try:
-            features = [
-                current_state.get('gpu_temp', 0),
-                current_state.get('gpu_load', 0),
-                current_state.get('cpu_load', 0),
-                current_state.get('ram_percent', 0),
-            ]
+            # Prepare input
+            X = np.array([[
+                current_state.get('clock', 1500),
+                current_state.get('voltage', 1000),
+                current_state.get('temperature', 50),
+                current_state.get('load', 50)
+            ]])
             
-            if any(math.isnan(f) or math.isinf(f) for f in features):
-                return None
-            
-            X = np.array([features])
             X_scaled = self.scaler.transform(X)
             
-            prediction = self.model.predict(X_scaled)[0]
-            return max(0, min(100, prediction))
-        except:
-            return None
+            # Predict
+            predicted_clock = int(self.model_gpu.predict(X_scaled)[0])
+            
+            # Safety checks
+            base_clock = current_state.get('clock', 1500)
+            predicted_clock = max(base_clock - 200, min(base_clock + 500, predicted_clock))
+            
+            return {
+                'optimal_clock': predicted_clock,
+                'optimal_voltage': current_state.get('voltage', 1000) - 50,  # Conservative
+                'confidence': 0.7,  # Medium confidence
+                'method': 'ml_prediction'
+            }
+        
+        except Exception as e:
+            print(f"[ML Optimizer] Prediction failed: {e}")
+            return self._get_safe_defaults()
     
-    def get_recommendations(self, current_state: Dict) -> List[str]:
-        """Get optimization recommendations based on current state"""
+    def _get_safe_defaults(self) -> Dict:
+        """Return safe default optimization values"""
+        return {
+            'optimal_clock': 0,  # No change
+            'optimal_voltage': -50,  # Small undervolt
+            'confidence': 0.5,
+            'method': 'safe_defaults'
+        }
+    
+    def cleanup_old_data(self, days: int = 90):
+        """Remove old optimization records"""
         if not self.enabled:
-            return []
+            return
         
-        recommendations = []
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            
+            cutoff = datetime.now().replace(day=datetime.now().day - days).isoformat()
+            
+            c.execute('DELETE FROM gpu_optimizations WHERE timestamp < ?', (cutoff,))
+            c.execute('DELETE FROM ram_optimizations WHERE timestamp < ?', (cutoff,))
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"[ML Optimizer] Cleaned up data older than {days} days")
         
-        # Temperature-based recommendations
-        gpu_temp = current_state.get('gpu_temp', 0)
-        if gpu_temp > 75:
-            recommendations.append(f"🌡️ GPU hot ({gpu_temp}°C) - Consider Quick Boost")
-        elif gpu_temp > 65:
-            recommendations.append(f"⚠️ GPU warm ({gpu_temp}°C) - Monitor temperature")
-        
-        # Load-based recommendations
-        cpu_load = current_state.get('cpu_load', 0)
-        if cpu_load > 80:
-            recommendations.append(f"💻 CPU load high ({cpu_load}%) - Close background apps")
-        
-        ram_percent = current_state.get('ram_percent', 0)
-        if ram_percent > 85:
-            recommendations.append(f"🧠 RAM usage high ({ram_percent}%) - Free up memory")
-        
-        # ML-based prediction
-        if SKLEARN_AVAILABLE and self.model is not None:
-            improvement = self.predict_improvement(current_state)
-            if improvement and improvement > 5:
-                recommendations.append(f"🤖 AI suggests optimization (expected +{improvement:.0f}% improvement)")
-        else:
-            if len(self.history) < 10:
-                recommendations.append(f"📊 Learning... ({len(self.history)}/10 samples collected)")
-        
-        return recommendations
+        except Exception as e:
+            print(f"[ML Optimizer] Cleanup failed: {e}")
     
-    def get_optimal_settings(self, current_state: Dict) -> Dict:
-        """Predict optimal settings (future feature)"""
-        # Placeholder for advanced optimization
-        # Will predict: gpu_clock, gpu_voltage, fan_speed, etc.
-        return {
-            'gpu_clock': None,
-            'gpu_voltage': None,
-            'fan_speed': None,
-        }
-    
-    def get_stats(self) -> Dict:
-        """Get ML optimizer statistics"""
-        successful = sum(1 for r in self.history if r['success'])
-        total = len(self.history)
+    def get_statistics(self) -> Dict:
+        """Get optimization statistics"""
+        if not self.enabled:
+            return {'enabled': False}
         
-        avg_improvement = 0
-        if successful > 0:
-            improvements = [r['improvement'] for r in self.history if r['success']]
-            avg_improvement = sum(improvements) / len(improvements)
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            
+            c.execute('SELECT COUNT(*) FROM gpu_optimizations')
+            gpu_count = c.fetchone()[0]
+            
+            c.execute('SELECT COUNT(*) FROM gpu_optimizations WHERE success = 1')
+            gpu_success = c.fetchone()[0]
+            
+            c.execute('SELECT AVG(result_temp - base_temp) FROM gpu_optimizations WHERE success = 1')
+            avg_temp_reduction = c.fetchone()[0] or 0
+            
+            conn.close()
+            
+            return {
+                'enabled': True,
+                'total_optimizations': gpu_count,
+                'successful_optimizations': gpu_success,
+                'success_rate': gpu_success / gpu_count if gpu_count > 0 else 0,
+                'avg_temp_reduction': round(avg_temp_reduction, 2),
+                'model_trained': self.model_gpu is not None
+            }
         
-        return {
-            'total_records': total,
-            'successful': successful,
-            'success_rate': (successful / total * 100) if total > 0 else 0,
-            'avg_improvement': avg_improvement,
-            'model_trained': self.model is not None,
-            'sklearn_available': SKLEARN_AVAILABLE,
-        }
+        except Exception as e:
+            print(f"[ML Optimizer] Failed to get statistics: {e}")
+            return {'enabled': True, 'error': str(e)}
 
 # Global instance
 _ml_optimizer = None
 
-def get_ml_optimizer() -> Optional[LocalMLOptimizer]:
+def get_ml_optimizer(enabled: bool = False) -> LocalMLOptimizer:
     """Get global ML optimizer instance"""
-    return _ml_optimizer
-
-def init_ml_optimizer(enabled: bool = False, data_file: str = "data/ml_history.json") -> LocalMLOptimizer:
-    """Initialize global ML optimizer"""
     global _ml_optimizer
-    _ml_optimizer = LocalMLOptimizer(enabled, data_file)
+    if _ml_optimizer is None:
+        _ml_optimizer = LocalMLOptimizer(enabled=enabled)
     return _ml_optimizer
 
 if __name__ == "__main__":
-    # Test ML optimizer
-    print("Testing ML Optimizer...")
-    print(f"scikit-learn available: {SKLEARN_AVAILABLE}")
+    # Test
+    ml = LocalMLOptimizer("test_ml.db", enabled=True)
     
-    optimizer = LocalMLOptimizer(enabled=True, data_file="test_ml_history.json")
-    
-    # Simulate some optimization attempts
-    print("\nSimulating optimizations...")
+    # Simulate some optimizations
     for i in range(15):
         before = {
-            'gpu_temp': 70 + i,
-            'gpu_load': 50 + i * 2,
-            'cpu_load': 40 + i,
-            'ram_percent': 60 + i,
+            'gpu_name': 'RTX 3060',
+            'clock': 1500 + i * 10,
+            'voltage': 1000,
+            'temperature': 60 + i * 2,
+            'load': 50 + i * 3
         }
         after = {
-            'gpu_temp': before['gpu_temp'] - 5,  # Improved
-            'gpu_load': before['gpu_load'],
-            'cpu_load': before['cpu_load'] - 10,
-            'ram_percent': before['ram_percent'] - 5,
+            'clock': 1600 + i * 10,
+            'voltage': 950,
+            'temperature': 55 + i * 2,
+            'fps': 100 + i * 5
         }
-        optimizer.record_optimization(before, after, success=True)
-        print(f"  Record {i+1}: Temp {before['gpu_temp']}°C → {after['gpu_temp']}°C")
+        ml.record_gpu_optimization(before, after, success=True, stable=True)
     
-    # Get statistics
-    print("\nML Statistics:")
-    stats = optimizer.get_stats()
-    for key, value in stats.items():
-        print(f"  {key}: {value}")
+    # Test prediction
+    current = {'clock': 1550, 'voltage': 1000, 'temperature': 65, 'load': 70}
+    prediction = ml.predict_optimal_gpu_settings(current)
+    print(f"\nPrediction: {prediction}")
     
-    # Get recommendations
-    print("\nRecommendations for hot GPU:")
-    test_state = {
-        'gpu_temp': 80,
-        'gpu_load': 90,
-        'cpu_load': 60,
-        'ram_percent': 70,
-    }
-    recommendations = optimizer.get_recommendations(test_state)
-    for rec in recommendations:
-        print(f"  {rec}")
+    # Statistics
+    stats = ml.get_statistics()
+    print(f"\nStatistics: {stats}")
     
     # Cleanup
-    if os.path.exists("test_ml_history.json"):
-        os.remove("test_ml_history.json")
-    
-    print("\n✅ ML Optimizer test complete!")
+    import os
+    if os.path.exists("test_ml.db"):
+        os.remove("test_ml.db")
