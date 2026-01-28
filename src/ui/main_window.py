@@ -23,14 +23,16 @@ from system_monitor import SystemMonitor
 from ui.settings_dialog import SettingsDialog
 
 # Game Profiles imports
+GAMES_AVAILABLE = False
 try:
     from profiles.game_profiles import GameProfileManager
     from profiles.game_detector import GameDetector
     from profiles.optimization_applier import ProfileApplier
     from ui.games_widget import GamesWidget
     GAMES_AVAILABLE = True
+    print("[OK] Game Profiles system loaded")
 except ImportError as e:
-    print(f"Game Profiles not available: {e}")
+    print(f"[WARN] Game Profiles not available: {e}")
     GAMES_AVAILABLE = False
 
 class MetricCard(QFrame):
@@ -164,8 +166,11 @@ class PartMartMainWindow(QMainWindow):
         self.ram_card = None
         self.cpu_card = None
         
+        # Store games availability as instance variable
+        self.games_available = GAMES_AVAILABLE
+        
         # Initialize Game Profiles system
-        if GAMES_AVAILABLE:
+        if self.games_available:
             try:
                 self.profile_manager = GameProfileManager(profiles_dir="config/profiles")
                 self.game_detector = GameDetector(self.profile_manager)
@@ -178,7 +183,7 @@ class PartMartMainWindow(QMainWindow):
                 self.logger.info("Game Profiles system initialized")
             except Exception as e:
                 self.logger.error(f"Failed to initialize Game Profiles: {e}")
-                GAMES_AVAILABLE = False
+                self.games_available = False
         
         self._setup_ui()
         self._create_menu_bar()
@@ -194,7 +199,7 @@ class PartMartMainWindow(QMainWindow):
         self._update_system_data()
         
         # Game detection timer
-        if GAMES_AVAILABLE:
+        if self.games_available:
             self.game_timer = QTimer()
             self.game_timer.timeout.connect(self._update_game_detection)
             self.game_timer.start(3000)  # Check every 3 seconds
@@ -237,7 +242,7 @@ class PartMartMainWindow(QMainWindow):
         pages = [self.page_home, self.page_gpu, self.page_ram]
         
         # Add Games page if available
-        if GAMES_AVAILABLE:
+        if self.games_available:
             self.page_games = GamesWidget(self.profile_manager, self.game_detector)
             pages.append(self.page_games)
         else:
@@ -443,7 +448,7 @@ class PartMartMainWindow(QMainWindow):
         self.ram_action = self._create_action_card("ram_tuner", "xmp_and_cleanup", lambda: self._switch_page(2))
         
         # Add Games action card if available
-        if GAMES_AVAILABLE:
+        if self.games_available:
             self.games_action = self._create_action_card(
                 "games", 
                 "Auto-optimize games",
@@ -736,7 +741,7 @@ class PartMartMainWindow(QMainWindow):
     
     def _update_game_detection(self):
         """Update game detection"""
-        if GAMES_AVAILABLE and hasattr(self, 'game_detector'):
+        if self.games_available and hasattr(self, 'game_detector'):
             try:
                 self.game_detector.update()
             except Exception as e:
@@ -803,7 +808,7 @@ class PartMartMainWindow(QMainWindow):
         
         # Update action cards
         cards = [self.gpu_action, self.ram_action]
-        if GAMES_AVAILABLE and hasattr(self, 'games_action'):
+        if self.games_available and hasattr(self, 'games_action'):
             cards.append(self.games_action)
         
         for card in cards:
