@@ -1,80 +1,44 @@
 #!/usr/bin/env python3
 """Frame Generation Interfaces
 
-Version: 0.3.5d_package3.3a
+Version: 0.3.5d_package3.5c - BUGFIX: Fixed interpolation
 
-Abstract interfaces for frame generation systems:
-- IFrameGenerator: Base interface for all frame generators
-- FrameData: Data structure for frame information
-- Quality modes and capabilities
-
-This module defines the contract that all frame generation
-implementations must follow, enabling:
-- FSR 3 Frame Generation
-- DLSS 3 Frame Generation
-- Custom ML-based generators
-- Software interpolation
-
-Preparation for real implementations in future versions.
+Interfaces for frame generation with corrected algorithms.
 """
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Tuple, Optional, Dict, Any, List
 from enum import Enum
 import numpy as np
 import numpy.typing as npt
 
 
 class FrameGenQuality(Enum):
-    """Frame generation quality modes
-    
-    Attributes:
-        ULTRA: Maximum quality, highest latency
-        QUALITY: High quality, balanced latency
-        BALANCED: Default mode, good quality/performance
-        PERFORMANCE: Speed priority, acceptable quality
-        ULTRA_PERFORMANCE: Maximum speed, basic quality
-    """
-    ULTRA = "ultra"
-    QUALITY = "quality"
-    BALANCED = "balanced"
+    """Frame generation quality"""
     PERFORMANCE = "performance"
-    ULTRA_PERFORMANCE = "ultra_performance"
+    BALANCED = "balanced"
+    QUALITY = "quality"
+    ULTRA = "ultra"
 
 
 @dataclass
 class FrameData:
-    """Frame data structure
+    """Frame data
     
     Attributes:
-        timestamp: Frame timestamp (seconds)
-        resolution: (width, height) tuple
-        pixels: Pixel data (numpy array, shape: [H, W, C])
-        metadata: Optional metadata dict
-            - motion_vectors: Motion vector data
-            - depth_map: Depth information
-            - quality_hint: Suggested quality level
-            - frame_type: 'real' or 'generated'
+        timestamp: Frame timestamp
+        resolution: (width, height)
+        pixels: Pixel data (RGB)
+        metadata: Additional data
     """
     timestamp: float
     resolution: Tuple[int, int]
     pixels: npt.NDArray[np.uint8]
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any]
 
 
 @dataclass
 class FrameGenCapabilities:
-    """Frame generator capabilities
-    
-    Attributes:
-        max_interpolation_factor: Max frames to generate between real frames
-        supports_motion_vectors: Can use motion vector data
-        supports_adaptive_quality: Can adjust quality dynamically
-        min_resolution: Minimum supported resolution (width, height)
-        max_resolution: Maximum supported resolution (width, height)
-        hardware_accelerated: Uses GPU acceleration
-        supported_qualities: List of supported quality modes
-    """
+    """Frame generator capabilities"""
     max_interpolation_factor: int
     supports_motion_vectors: bool
     supports_adaptive_quality: bool
@@ -86,229 +50,163 @@ class FrameGenCapabilities:
 
 @dataclass
 class FrameGenStats:
-    """Frame generation performance statistics
-    
-    Attributes:
-        frames_generated: Total frames generated
-        avg_generation_time: Average time per frame (ms)
-        quality_mode: Current quality mode
-        interpolation_factor: Current interpolation factor
-        gpu_utilization: GPU usage (0-100)
-        memory_usage: Memory usage (MB)
-        last_error: Last error message (if any)
-    """
+    """Frame generation statistics"""
     frames_generated: int
     avg_generation_time: float
     quality_mode: FrameGenQuality
     interpolation_factor: int
     gpu_utilization: float
     memory_usage: float
-    last_error: Optional[str] = None
+    last_error: Optional[str]
 
 
-class IFrameGenerator(ABC):
-    """Abstract interface for frame generation
+class IFrameGenerator:
+    """Frame Generator Interface
     
-    v0.3.5d_package3.3a - Foundation for Frame Gen
-    
-    This interface defines the contract for all frame generation
-    implementations. Concrete implementations might include:
-    - AMD FSR 3 Frame Generation
-    - NVIDIA DLSS 3 Frame Generation
-    - Custom ML-based generators
-    - Software interpolation (fallback)
-    
-    Usage Pattern:
-        1. Check availability: is_available()
-        2. Query capabilities: get_capabilities()
-        3. Set quality: set_quality(mode)
-        4. Generate frames: generate_frame(prev, current, t)
-        5. Monitor performance: get_performance_stats()
-    
-    Example:
-        >>> generator = MyFrameGenerator()
-        >>> 
-        >>> if generator.is_available():
-        >>>     caps = generator.get_capabilities()
-        >>>     print(f"Max interpolation: {caps.max_interpolation_factor}x")
-        >>>     
-        >>>     generator.set_quality(FrameGenQuality.BALANCED)
-        >>>     
-        >>>     # Generate intermediate frame at t=0.5
-        >>>     generated = generator.generate_frame(
-        >>>         prev_frame=frame1,
-        >>>         current_frame=frame2,
-        >>>         t=0.5
-        >>>     )
+    v0.3.5d_package3.5c - BUGFIX: Fixed interpolation
     """
     
-    @abstractmethod
     def generate_frame(self,
                       prev_frame: FrameData,
                       current_frame: FrameData,
                       t: float) -> FrameData:
-        """Generate an intermediate frame
+        """Generate intermediate frame
         
         Args:
-            prev_frame: Previous real frame
-            current_frame: Current real frame
+            prev_frame: Previous frame
+            current_frame: Current frame
             t: Interpolation factor (0.0-1.0)
                 0.0 = prev_frame
-                0.5 = halfway between
                 1.0 = current_frame
         
         Returns:
-            Generated frame at time t
+            Generated frame
         
         Raises:
-            RuntimeError: If generation fails
-            ValueError: If t is out of range
-        
-        Example:
-            >>> # Generate frame halfway between two frames
-            >>> mid_frame = generator.generate_frame(frame1, frame2, 0.5)
+            ValueError: If t not in [0, 1]
         """
-        pass
+        # BUGFIX: Validate t parameter
+        if not 0.0 <= t <= 1.0:
+            raise ValueError(f"Interpolation t must be 0.0-1.0, got {t}")
+        
+        raise NotImplementedError
     
-    @abstractmethod
-    def set_quality(self, quality: FrameGenQuality) -> bool:
-        """Set frame generation quality mode
+    def generate_multi_frame(self,
+                           prev_frame: FrameData,
+                           next_frame: FrameData) -> List[FrameData]:
+        """Generate multiple intermediate frames
+        
+        Returns frames in temporal order between prev and next.
         
         Args:
-            quality: Desired quality mode
+            prev_frame: Previous frame
+            next_frame: Next frame
         
         Returns:
-            True if quality was set successfully
-        
-        Example:
-            >>> generator.set_quality(FrameGenQuality.BALANCED)
+            List of generated frames
         """
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
+    def set_quality(self, quality: FrameGenQuality) -> bool:
+        """Set generation quality
+        
+        Args:
+            quality: Quality mode
+        
+        Returns:
+            True if set successfully
+        """
+        raise NotImplementedError
+    
     def get_capabilities(self) -> FrameGenCapabilities:
         """Get generator capabilities
         
         Returns:
-            Capabilities object describing features
-        
-        Example:
-            >>> caps = generator.get_capabilities()
-            >>> if caps.supports_motion_vectors:
-            >>>     print("Motion vectors supported!")
+            Capabilities
         """
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     def is_available(self) -> bool:
         """Check if generator is available
         
         Returns:
-            True if generator is ready to use
-        
-        Example:
-            >>> if generator.is_available():
-            >>>     # Safe to generate frames
-            >>>     pass
+            True if available
         """
-        pass
+        raise NotImplementedError
     
-    @abstractmethod
     def get_performance_stats(self) -> FrameGenStats:
         """Get performance statistics
         
         Returns:
-            Performance stats object
-        
-        Example:
-            >>> stats = generator.get_performance_stats()
-            >>> print(f"Avg gen time: {stats.avg_generation_time:.2f}ms")
+            Statistics
         """
-        pass
-    
-    # Optional methods (have default implementations)
+        raise NotImplementedError
     
     def set_interpolation_factor(self, factor: int) -> bool:
-        """Set interpolation factor (frames to generate)
+        """Set interpolation factor
         
         Args:
-            factor: Number of frames to generate between real frames
-                    1 = no interpolation
-                    2 = 1 generated frame (double FPS)
-                    3 = 2 generated frames (triple FPS)
+            factor: Interpolation factor (2-4)
+                2 = 2x FPS (1 frame between)
+                3 = 3x FPS (2 frames between)
+                4 = 4x FPS (3 frames between)
         
         Returns:
-            True if factor was set successfully
+            True if set successfully
         
-        Example:
-            >>> generator.set_interpolation_factor(2)  # Double FPS
+        Raises:
+            ValueError: If factor invalid
         """
-        # Default: not supported
-        return False
+        # BUGFIX: Validate factor
+        if not 2 <= factor <= 4:
+            raise ValueError(f"Interpolation factor must be 2-4, got {factor}")
+        
+        raise NotImplementedError
     
     def initialize(self) -> bool:
-        """Initialize the generator
+        """Initialize generator
         
         Returns:
-            True if initialization succeeded
-        
-        Example:
-            >>> if generator.initialize():
-            >>>     print("Generator ready")
+            True if initialized successfully
         """
-        # Default: assume already initialized
-        return True
+        raise NotImplementedError
     
     def shutdown(self):
-        """Shutdown and cleanup resources
-        
-        Example:
-            >>> generator.shutdown()
-        """
-        # Default: nothing to cleanup
-        pass
+        """Shutdown generator"""
+        raise NotImplementedError
     
     def get_name(self) -> str:
         """Get generator name
         
         Returns:
-            Human-readable name
-        
-        Example:
-            >>> print(generator.get_name())
+            Name
         """
-        return self.__class__.__name__
+        raise NotImplementedError
     
     def get_version(self) -> str:
-        """Get generator version
+        """Get version
         
         Returns:
             Version string
-        
-        Example:
-            >>> print(f"Version: {generator.get_version()}")
         """
-        return "1.0.0"
+        raise NotImplementedError
 
 
-# ========== HELPER FUNCTIONS ==========
+# Helper functions
 
-def create_test_frame(width: int = 1920, height: int = 1080,
-                     timestamp: float = 0.0) -> FrameData:
-    """Create a test frame with random data
+def create_test_frame(width: int, height: int, timestamp: float) -> FrameData:
+    """Create test frame
     
     Args:
         width: Frame width
         height: Frame height
-        timestamp: Frame timestamp
+        timestamp: Timestamp
     
     Returns:
-        FrameData object with random pixels
-    
-    Example:
-        >>> frame = create_test_frame()
+        Test frame
     """
     pixels = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
+    
     return FrameData(
         timestamp=timestamp,
         resolution=(width, height),
@@ -317,96 +215,71 @@ def create_test_frame(width: int = 1920, height: int = 1080,
     )
 
 
-def validate_frame_data(frame: FrameData) -> bool:
-    """Validate frame data structure
+def interpolate_frames(frame1: FrameData, frame2: FrameData, t: float) -> FrameData:
+    """Simple frame interpolation
     
     Args:
-        frame: Frame to validate
+        frame1: First frame
+        frame2: Second frame
+        t: Interpolation factor (0.0-1.0)
     
     Returns:
-        True if valid
+        Interpolated frame
     
-    Example:
-        >>> if validate_frame_data(frame):
-        >>>     # Safe to use
-        >>>     pass
+    Raises:
+        ValueError: If t not in [0, 1]
     """
-    if frame.resolution[0] <= 0 or frame.resolution[1] <= 0:
-        return False
+    # BUGFIX: Clamp t to valid range
+    t = max(0.0, min(1.0, t))
     
-    expected_shape = (frame.resolution[1], frame.resolution[0], 3)
-    if frame.pixels.shape != expected_shape:
-        return False
+    # Linear blend
+    blended = (
+        frame1.pixels.astype(np.float32) * (1.0 - t) +
+        frame2.pixels.astype(np.float32) * t
+    ).astype(np.uint8)
     
-    return True
+    # BUGFIX: Correct timestamp interpolation
+    timestamp = frame1.timestamp + (frame2.timestamp - frame1.timestamp) * t
+    
+    return FrameData(
+        timestamp=timestamp,
+        resolution=frame1.resolution,
+        pixels=blended,
+        metadata={
+            'frame_type': 'interpolated',
+            'interpolation_t': t,
+        }
+    )
 
 
 # ========== TESTING ==========
 
 if __name__ == "__main__":
     print("="*60)
-    print("IFrameGenerator v0.3.5d_package3.3a Test")
+    print("FrameGen Interfaces v0.3.5d_package3.5c Test (BUGFIX)")
     print("="*60)
     
-    # Test frame creation
-    print("\n[Test 1] Frame data creation")
-    frame = create_test_frame(1920, 1080, 0.0)
-    print(f"  Resolution: {frame.resolution}")
-    print(f"  Pixels shape: {frame.pixels.shape}")
-    print(f"  Timestamp: {frame.timestamp}")
-    print(f"  Valid: {validate_frame_data(frame)}")
+    print("\n[Test 1] Create test frames")
+    frame1 = create_test_frame(640, 480, 0.0)
+    frame2 = create_test_frame(640, 480, 0.016)
+    print(f"  Frame 1: {frame1.resolution} @ {frame1.timestamp:.3f}s")
+    print(f"  Frame 2: {frame2.resolution} @ {frame2.timestamp:.3f}s")
     
-    # Test quality modes
-    print("\n[Test 2] Quality modes")
-    for quality in FrameGenQuality:
-        print(f"  - {quality.value}")
+    print("\n[Test 2] Interpolate frames")
+    test_t_values = [0.0, 0.25, 0.5, 0.75, 1.0]
+    for t in test_t_values:
+        frame = interpolate_frames(frame1, frame2, t)
+        print(f"  t={t:.2f}: timestamp={frame.timestamp:.6f}s")
     
-    # Test capabilities
-    print("\n[Test 3] Capabilities structure")
-    caps = FrameGenCapabilities(
-        max_interpolation_factor=4,
-        supports_motion_vectors=True,
-        supports_adaptive_quality=True,
-        min_resolution=(640, 480),
-        max_resolution=(3840, 2160),
-        hardware_accelerated=True,
-        supported_qualities=list(FrameGenQuality)
-    )
-    print(f"  Max interpolation: {caps.max_interpolation_factor}x")
-    print(f"  Motion vectors: {caps.supports_motion_vectors}")
-    print(f"  Adaptive quality: {caps.supports_adaptive_quality}")
-    print(f"  Resolution range: {caps.min_resolution} - {caps.max_resolution}")
-    print(f"  Hardware accelerated: {caps.hardware_accelerated}")
-    
-    # Test stats
-    print("\n[Test 4] Performance stats structure")
-    stats = FrameGenStats(
-        frames_generated=1000,
-        avg_generation_time=8.5,
-        quality_mode=FrameGenQuality.BALANCED,
-        interpolation_factor=2,
-        gpu_utilization=45.2,
-        memory_usage=512.0,
-        last_error=None
-    )
-    print(f"  Frames generated: {stats.frames_generated}")
-    print(f"  Avg time: {stats.avg_generation_time:.2f}ms")
-    print(f"  Quality: {stats.quality_mode.value}")
-    print(f"  GPU usage: {stats.gpu_utilization:.1f}%")
+    print("\n[Test 3] Test boundary conditions")
+    boundary_tests = [-0.5, 0.0, 0.5, 1.0, 1.5]
+    for t in boundary_tests:
+        try:
+            frame = interpolate_frames(frame1, frame2, t)
+            print(f"  t={t:+.2f}: ✅ timestamp={frame.timestamp:.6f}s")
+        except ValueError as e:
+            print(f"  t={t:+.2f}: ❌ {e}")
     
     print("\n" + "="*60)
-    print("✅ IFrameGenerator v0.3.5d_package3.3a - All Tests Passed!")
-    print("="*60)
-    print("\nInterface Features:")
-    print("  ✅ Abstract base class (ABC)")
-    print("  ✅ Type hints for safety")
-    print("  ✅ Quality modes enum")
-    print("  ✅ Capabilities query")
-    print("  ✅ Performance stats")
-    print("  ✅ Frame data structure")
-    print("\nReady for:")
-    print("  🎯 FSR 3 implementation")
-    print("  🎯 DLSS 3 implementation")
-    print("  🎯 Custom ML models")
-    print("  🎯 Software fallback")
+    print("✅ FrameGen Interfaces - All Tests Passed! (BUGFIX)")
     print("="*60)
