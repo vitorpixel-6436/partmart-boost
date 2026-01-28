@@ -11,275 +11,130 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
 
+# Импорты наших компонентов
+from src.ui.ai_widget import PartMartAIWidget
 
 class MainWindow(QMainWindow):
     """Главное окно PartMart Boost"""
-    
+
     # Сигналы
     quick_boost_requested = pyqtSignal()
-    
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("🐉 PartMart Boost v0.1.0-dev")
-        self.setMinimumSize(1000, 700)
-        
+        self.setMinimumSize(1050, 750)
+
         # Загрузка темы
         self.load_theme()
-        
+
         # Создание UI
         self.init_ui()
-        
+
     def load_theme(self):
-        """Загрузка Steam-style темы"""
+        """Загрузка Steam-style QSS"""
         theme_path = Path(__file__).parent / "theme.qss"
         if theme_path.exists():
             with open(theme_path, "r", encoding="utf-8") as f:
                 self.setStyleSheet(f.read())
-    
+
     def init_ui(self):
-        """Инициализация UI компонентов"""
-        # Центральный виджет
+        """Инициализация интерфейса"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
+
+        # Главный вертикальный лейаут
+        self.main_layout = QVBoxLayout(central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        # --- HEADER ---
+        self.header = QWidget()
+        self.header.setObjectName("header")
+        self.header.setFixedHeight(80)
+        header_layout = QHBoxLayout(self.header)
         
-        # Главный layout
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setSpacing(20)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        logo_lbl = QLabel("🐉 PARTMART BOOST")
+        logo_lbl.setObjectName("logo_label")
+        logo_lbl.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         
-        # Header
-        header = self.create_header()
-        main_layout.addWidget(header)
+        header_layout.addWidget(logo_lbl)
+        header_layout.addStretch()
         
-        # Быстрый буст кнопка
-        quick_boost_btn = QPushButton("⚡ Быстрый Буст")
-        quick_boost_btn.setObjectName("quickBoostBtn")
-        quick_boost_btn.clicked.connect(self.on_quick_boost)
-        main_layout.addWidget(quick_boost_btn)
+        self.main_layout.addWidget(self.header)
+
+        # --- CONTENT AREA (Tabs) ---
+        self.tabs = QTabWidget()
+        self.tabs.setObjectName("main_tabs")
         
-        # Stats Dashboard
-        stats_widget = self.create_stats_dashboard()
-        main_layout.addWidget(stats_widget)
+        # Вкладка "Дашборд"
+        self.dashboard_tab = QWidget()
+        self.init_dashboard_tab()
+        self.tabs.addTab(self.dashboard_tab, "🚀 ДАШБОРД")
+
+        # Вкладка "AI Оптимизация" (НОВАЯ)
+        self.ai_tab = QWidget()
+        self.init_ai_tab()
+        self.tabs.addTab(self.ai_tab, "🤖 AI OPTIMIZER")
+
+        # Вкладка "Инструменты"
+        self.tools_tab = QWidget()
+        self.tabs.addTab(self.tools_tab, "🛠 ИНСТРУМЕНТЫ")
+
+        self.main_layout.addWidget(self.tabs)
+
+        # --- STATUS BAR ---
+        self.setStatusBar(QStatusBar())
+        self.statusBar().showMessage("Ready to boost performance.")
+
+    def init_dashboard_tab(self):
+        layout = QHBoxLayout(self.dashboard_tab)
         
-        # Tab Widget
-        tabs = self.create_tabs()
-        main_layout.addWidget(tabs)
+        # Левая колонка: Статистика
+        left_panel = QVBoxLayout()
         
-        # Status Bar
-        self.create_status_bar()
-    
-    def create_header(self) -> QWidget:
-        """Создание header с лого и описанием"""
-        header = QWidget()
-        layout = QVBoxLayout(header)
-        layout.setSpacing(5)
+        stats_group = QGroupBox("ТЕКУЩИЕ ПОКАЗАТЕЛИ")
+        stats_layout = QGridLayout(stats_group)
         
-        # Заголовок
-        title = QLabel("🐉 PartMart Boost")
-        title.setObjectName("titleLabel")
-        layout.addWidget(title)
+        stats_layout.addWidget(QLabel("GPU Load:"), 0, 0)
+        self.gpu_pbar = QProgressBar()
+        self.gpu_pbar.setValue(45)
+        stats_layout.addWidget(self.gpu_pbar, 0, 1)
         
-        # Подзаголовок
-        subtitle = QLabel("Твой ПК. Твоя мощь.")
-        subtitle.setObjectName("subtitleLabel")
-        layout.addWidget(subtitle)
+        stats_layout.addWidget(QLabel("RAM Usage:"), 1, 0)
+        self.ram_pbar = QProgressBar()
+        self.ram_pbar.setValue(30)
+        stats_layout.addWidget(self.ram_pbar, 1, 1)
         
-        return header
-    
-    def create_stats_dashboard(self) -> QWidget:
-        """Создание панели со статистикой"""
-        dashboard = QWidget()
-        layout = QHBoxLayout(dashboard)
-        layout.setSpacing(10)
+        left_panel.addWidget(stats_group)
+        left_panel.addStretch()
         
-        # Статистические карточки
-        cards_data = [
-            ("🎮 FPS", "-- FPS", "Текущий"),
-            ("🌡️ GPU", "-- °C", "Температура"),
-            ("💾 RAM", "-- GB", "Использовано"),
-            ("⬆️ Прирост", "-- %", "Оптимизация")
-        ]
+        # Правая колонка: Кнопки действий
+        right_panel = QVBoxLayout()
         
-        for title, value, subtitle in cards_data:
-            card = self.create_stat_card(title, value, subtitle)
-            layout.addWidget(card)
+        boost_btn = QPushButton("🚀 QUICK BOOST")
+        boost_btn.setObjectName("boost_button")
+        boost_btn.setFixedHeight(60)
+        boost_btn.clicked.connect(self.on_quick_boost)
         
-        return dashboard
-    
-    def create_stat_card(self, title: str, value: str, subtitle: str) -> QGroupBox:
-        """Создание карточки статистики"""
-        card = QGroupBox()
-        layout = QVBoxLayout(card)
+        right_panel.addWidget(boost_btn)
+        right_panel.addStretch()
         
-        # Заголовок
-        title_label = QLabel(title)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = title_label.font()
-        font.setPointSize(12)
-        title_label.setFont(font)
-        layout.addWidget(title_label)
-        
-        # Значение
-        value_label = QLabel(value)
-        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = value_label.font()
-        font.setPointSize(20)
-        font.setBold(True)
-        value_label.setFont(font)
-        layout.addWidget(value_label)
-        
-        # Подзаголовок
-        sub_label = QLabel(subtitle)
-        sub_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(sub_label)
-        
-        return card
-    
-    def create_tabs(self) -> QTabWidget:
-        """Создание вкладок"""
-        tabs = QTabWidget()
-        
-        # Вкладки
-        tabs.addTab(self.create_optimization_tab(), "🚀 Оптимизация")
-        tabs.addTab(self.create_monitor_tab(), "📊 Мониторинг")
-        tabs.addTab(self.create_games_tab(), "🎮 Игры")
-        tabs.addTab(self.create_settings_tab(), "⚙️ Настройки")
-        
-        return tabs
-    
-    def create_optimization_tab(self) -> QWidget:
-        """Вкладка оптимизации"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        # GPU Optimizer
-        gpu_group = QGroupBox("🎮 GPU Optimizer")
-        gpu_layout = QVBoxLayout(gpu_group)
-        
-        gpu_btn = QPushButton("Оптимизировать GPU")
-        gpu_btn.clicked.connect(lambda: self.show_info("GPU", "GPU оптимизация будет реализована"))
-        gpu_layout.addWidget(gpu_btn)
-        
-        gpu_progress = QProgressBar()
-        gpu_progress.setValue(0)
-        gpu_layout.addWidget(gpu_progress)
-        
-        layout.addWidget(gpu_group)
-        
-        # RAM Optimizer
-        ram_group = QGroupBox("💾 RAM Optimizer")
-        ram_layout = QVBoxLayout(ram_group)
-        
-        ram_btn = QPushButton("Оптимизировать RAM")
-        ram_btn.clicked.connect(lambda: self.show_info("RAM", "RAM оптимизация будет реализована"))
-        ram_layout.addWidget(ram_btn)
-        
-        ram_progress = QProgressBar()
-        ram_progress.setValue(0)
-        ram_layout.addWidget(ram_progress)
-        
-        layout.addWidget(ram_group)
-        
-        # OS Tweaks
-        os_group = QGroupBox("⚙️ OS Tweaks")
-        os_layout = QVBoxLayout(os_group)
-        
-        os_btn = QPushButton("Применить твики")
-        os_btn.clicked.connect(lambda: self.show_info("OS", "OS твики будут реализованы"))
-        os_layout.addWidget(os_btn)
-        
-        layout.addWidget(os_group)
-        
-        layout.addStretch()
-        
-        return tab
-    
-    def create_monitor_tab(self) -> QWidget:
-        """Вкладка мониторинга"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        info_label = QLabel("📊 Мониторинг производительности")
-        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = info_label.font()
-        font.setPointSize(14)
-        info_label.setFont(font)
-        layout.addWidget(info_label)
-        
-        placeholder = QLabel("
-Графики FPS, температур и загрузки\nбудут реализованы в следующих версиях")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(placeholder)
-        
-        layout.addStretch()
-        
-        return tab
-    
-    def create_games_tab(self) -> QWidget:
-        """Вкладка игр"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        info_label = QLabel("🎮 Game Launcher")
-        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = info_label.font()
-        font.setPointSize(14)
-        info_label.setFont(font)
-        layout.addWidget(info_label)
-        
-        placeholder = QLabel("
-Автоматическое обнаружение игр\nи индивидуальные профили\nбудут реализованы в следующих версиях")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(placeholder)
-        
-        layout.addStretch()
-        
-        return tab
-    
-    def create_settings_tab(self) -> QWidget:
-        """Вкладка настроек"""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        info_label = QLabel("⚙️ Настройки")
-        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = info_label.font()
-        font.setPointSize(14)
-        info_label.setFont(font)
-        layout.addWidget(info_label)
-        
-        placeholder = QLabel("
-Настройки приложения\nбудут реализованы в следующих версиях")
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(placeholder)
-        
-        layout.addStretch()
-        
-        return tab
-    
-    def create_status_bar(self):
-        """Создание status bar"""
-        status_bar = QStatusBar()
-        self.setStatusBar(status_bar)
-        status_bar.showMessage("✅ Готов к оптимизации")
-    
+        layout.addLayout(left_panel, 2)
+        layout.addLayout(right_panel, 1)
+
+    def init_ai_tab(self):
+        """Инициализация вкладки AI Optimizer"""
+        layout = QVBoxLayout(self.ai_tab)
+        self.ai_widget = PartMartAIWidget()
+        layout.addWidget(self.ai_widget)
+
     def on_quick_boost(self):
-        """Обработчик кнопки Быстрый Буст"""
+        """Обработка нажатия Quick Boost"""
+        # QMessageBox.information(self, "Boost", "Optimization started! Checking system state...")
         self.quick_boost_requested.emit()
-        self.show_info(
-            "Быстрый Буст",
-            "Функция Быстрого Буста будет реализована в следующих версиях.\n"
-            "Она автоматически оптимизирует GPU, RAM и OS настройки."
-        )
-    
-    def show_info(self, title: str, message: str):
-        """Показать информационное окно"""
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle(title)
-        msg_box.setText(message)
-        msg_box.setIcon(QMessageBox.Icon.Information)
-        msg_box.exec()
-    
-    def update_status(self, message: str):
-        """Обновить статус бар"""
-        self.statusBar().showMessage(message)
+
+    def update_ai_view(self, ai_report):
+        """Обновление AI виджета новыми данными"""
+        if hasattr(self, 'ai_widget'):
+            self.ai_widget.update_insights(ai_report)
