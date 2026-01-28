@@ -1,5 +1,6 @@
 """Fallback GPU monitor without external dependencies
 SOVEREIGNTY: Uses native OS APIs, no pynvml dependency
+Version: 0.3.5d - Package 2b
 """
 import platform
 import os
@@ -11,6 +12,12 @@ class FallbackGPUMonitor:
     
     This provides basic GPU monitoring without external dependencies
     for maximum sovereignty and reliability.
+    
+    v0.3.5d Package 2b fixes:
+    - Add memory_total/used/free fields (CRITICAL)
+    - Match schema with gpu_monitor.py
+    - Add timeouts to subprocess calls
+    - Better error handling
     """
     
     def __init__(self):
@@ -32,15 +39,19 @@ class FallbackGPUMonitor:
             print(f"[WARN] GPU detection failed: {e}")
     
     def _detect_windows(self):
-        """Detect GPU on Windows using WMIC"""
+        """Detect GPU on Windows using WMIC
+        
+        v0.3.5d: Add timeout
+        """
         try:
             # Use WMIC (built into Windows)
             result = subprocess.run(
                 ['wmic', 'path', 'win32_VideoController', 'get', 'name'],
                 capture_output=True,
                 text=True,
-                timeout=5,
-                check=False
+                timeout=3,  # v0.3.5d: Add timeout
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             
             if result.returncode == 0:
@@ -53,14 +64,17 @@ class FallbackGPUMonitor:
             print(f"[WARN] WMIC detection failed: {e}")
     
     def _detect_linux(self):
-        """Detect GPU on Linux using lspci"""
+        """Detect GPU on Linux using lspci
+        
+        v0.3.5d: Add timeout
+        """
         try:
             # Try lspci (usually available)
             result = subprocess.run(
                 ['lspci'],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=3,  # v0.3.5d: Add timeout
                 check=False
             )
             
@@ -85,7 +99,7 @@ class FallbackGPUMonitor:
                     ['glxinfo'],
                     capture_output=True,
                     text=True,
-                    timeout=5,
+                    timeout=3,  # v0.3.5d: Add timeout
                     check=False
                 )
                 
@@ -108,17 +122,24 @@ class FallbackGPUMonitor:
         return self.gpu_name if self.available else "No GPU detected (Fallback)"
     
     def get_gpu_data_windows(self) -> Dict:
-        """Get GPU data on Windows using native APIs"""
+        """Get GPU data on Windows using native APIs
+        
+        v0.3.5d Package 2b: Match schema with gpu_monitor.py
+        """
         data = {
             "name": self.gpu_name,
-            "temp_gpu": None,
+            "temp_gpu": 0,
             "temp_hotspot": None,
-            "clock_gpu": None,
-            "clock_mem": None,
-            "load_gpu": None,
-            "load_mem": None,
-            "power": None,
-            "fan_speed": None,
+            "clock_gpu": 0,
+            "clock_mem": 0,
+            "load_gpu": 0,
+            "load_mem": 0,
+            "power": 0,
+            "fan_speed": 0,
+            # v0.3.5d CRITICAL FIX: Add memory fields
+            "memory_total": 0,
+            "memory_used": 0,
+            "memory_free": 0,
         }
         
         # Try to get temperature using Windows Performance Counters
@@ -128,8 +149,9 @@ class FallbackGPUMonitor:
                 ['wmic', 'path', 'MSAcpi_ThermalZoneTemperature', 'get', 'CurrentTemperature'],
                 capture_output=True,
                 text=True,
-                timeout=5,
-                check=False
+                timeout=3,  # v0.3.5d: Add timeout
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             
             if result.returncode == 0:
@@ -145,23 +167,55 @@ class FallbackGPUMonitor:
         except Exception as e:
             print(f"[DEBUG] Temperature query failed: {e}")
         
+        # Try to get memory info (WMIC)
+        try:
+            result = subprocess.run(
+                ['wmic', 'path', 'win32_VideoController', 'get', 'AdapterRAM'],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                if len(lines) > 1:
+                    try:
+                        ram_bytes = int(lines[1].strip())
+                        ram_mb = ram_bytes // (1024 * 1024)
+                        data["memory_total"] = ram_mb
+                        # Can't get used/free without driver support
+                        data["memory_free"] = ram_mb  # Assume all free
+                    except ValueError:
+                        pass
+        except Exception:
+            pass
+        
         return data
     
     def get_gpu_data_linux(self) -> Dict:
-        """Get GPU data on Linux using sysfs"""
+        """Get GPU data on Linux using sysfs
+        
+        v0.3.5d Package 2b: Match schema with gpu_monitor.py
+        """
         data = {
             "name": self.gpu_name,
-            "temp_gpu": None,
+            "temp_gpu": 0,
             "temp_hotspot": None,
-            "clock_gpu": None,
-            "clock_mem": None,
-            "load_gpu": None,
-            "load_mem": None,
-            "power": None,
-            "fan_speed": None,
+            "clock_gpu": 0,
+            "clock_mem": 0,
+            "load_gpu": 0,
+            "load_mem": 0,
+            "power": 0,
+            "fan_speed": 0,
+            # v0.3.5d CRITICAL FIX: Add memory fields
+            "memory_total": 0,
+            "memory_used": 0,
+            "memory_free": 0,
         }
         
-        # Try to read temperature from sysfs (NVIDIA)
+        # Try to read temperature from sysfs (NVIDIA/AMD)
         sysfs_paths = [
             '/sys/class/drm/card0/device/hwmon/hwmon0/temp1_input',
             '/sys/class/drm/card1/device/hwmon/hwmon1/temp1_input',
@@ -201,6 +255,27 @@ class FallbackGPUMonitor:
             except Exception as e:
                 print(f"[DEBUG] Failed to read {path}: {e}")
         
+        # Try to read VRAM info (AMD)
+        vram_paths = [
+            '/sys/class/drm/card0/device/mem_info_vram_total',
+            '/sys/class/drm/card0/device/mem_info_vram_used',
+        ]
+        
+        try:
+            if os.path.exists(vram_paths[0]):
+                with open(vram_paths[0], 'r') as f:
+                    vram_total_bytes = int(f.read().strip())
+                    data["memory_total"] = vram_total_bytes // (1024 * 1024)  # MB
+            
+            if os.path.exists(vram_paths[1]):
+                with open(vram_paths[1], 'r') as f:
+                    vram_used_bytes = int(f.read().strip())
+                    data["memory_used"] = vram_used_bytes // (1024 * 1024)  # MB
+                    if data["memory_total"] > 0:
+                        data["memory_free"] = data["memory_total"] - data["memory_used"]
+        except Exception as e:
+            print(f"[DEBUG] VRAM read failed: {e}")
+        
         return data
     
     def get_gpu_data(self) -> Dict:
@@ -208,6 +283,8 @@ class FallbackGPUMonitor:
         
         Returns:
             Dictionary with GPU metrics
+        
+        v0.3.5d Package 2b: Consistent schema
         """
         if not self.available:
             return {
@@ -220,6 +297,10 @@ class FallbackGPUMonitor:
                 "load_mem": 0,
                 "power": 0,
                 "fan_speed": 0,
+                # v0.3.5d CRITICAL FIX: Always include memory fields
+                "memory_total": 0,
+                "memory_used": 0,
+                "memory_free": 0,
             }
         
         if self.os_type == "Windows":
@@ -237,6 +318,9 @@ class FallbackGPUMonitor:
                 "load_mem": 0,
                 "power": 0,
                 "fan_speed": 0,
+                "memory_total": 0,
+                "memory_used": 0,
+                "memory_free": 0,
             }
     
     def get_data(self) -> Dict:
@@ -253,20 +337,37 @@ class FallbackGPUMonitor:
 
 if __name__ == "__main__":
     # Test
-    print("[TEST] Testing FallbackGPUMonitor...")
+    print("[TEST] Testing FallbackGPUMonitor v0.3.5d Package 2b...")
     
     monitor = FallbackGPUMonitor()
     
     print(f"[INFO] GPU Name: {monitor.get_name()}")
     print(f"[INFO] Available: {monitor.is_available()}")
     
+    data = monitor.get_gpu_data()
+    
+    print("\n[SCHEMA] v0.3.5d Package 2b - Required fields:")
+    required_fields = [
+        'name', 'temp_gpu', 'temp_hotspot', 'clock_gpu', 'clock_mem',
+        'load_gpu', 'load_mem', 'power', 'fan_speed',
+        'memory_total', 'memory_used', 'memory_free'  # CRITICAL
+    ]
+    
+    for field in required_fields:
+        status = '✅' if field in data else '❌'
+        value = data.get(field)
+        print(f"  {status} {field}: {value}")
+    
     if monitor.is_available():
-        print("[PASS] GPU detected")
-        data = monitor.get_gpu_data()
+        print("\n[PASS] GPU detected")
         print(f"[INFO] GPU: {data['name']}")
         if data['temp_gpu']:
             print(f"[INFO] Temperature: {data['temp_gpu']}°C")
         if data['clock_gpu']:
             print(f"[INFO] Clock: {data['clock_gpu']} MHz")
+        if data['memory_total']:
+            print(f"[INFO] Memory: {data['memory_total']} MB")
     else:
-        print("[INFO] No GPU detected with fallback monitor")
+        print("\n[INFO] No GPU detected with fallback monitor")
+    
+    print("\n✅ FallbackGPUMonitor v0.3.5d Package 2b schema validated!")

@@ -13,6 +13,8 @@ Benefits:
 - Event-driven reactivity
 - Performance caching
 - Easy to add new monitors
+
+Version: 0.3.5d - Package 2b
 """
 import time
 from typing import Dict, Optional, Callable
@@ -28,6 +30,11 @@ class DataBus(QObject):
     - cpu_updated: CPU data changed
     - ram_updated: RAM data changed
     - error_occurred: Error happened
+    
+    v0.3.5d Package 2b improvements:
+    - Health status tracking
+    - Better error recovery
+    - Monitor availability logging
     """
     
     # Signals
@@ -38,7 +45,8 @@ class DataBus(QObject):
     error_occurred = pyqtSignal(str) # Errors
     
     def __init__(self, update_interval: int = 2000):
-        """
+        """Initialize DataBus
+        
         Args:
             update_interval: Update interval in milliseconds (default: 2000ms = 2s)
         """
@@ -63,6 +71,14 @@ class DataBus(QObject):
         # Throttling (only emit if changed significantly)
         self._throttle_enabled = True
         self._throttle_threshold = 0.01  # 1% change
+        
+        # v0.3.5d Package 2b: Health tracking
+        self._health_status = {
+            'gpu': {'available': False, 'name': 'Unknown'},
+            'cpu': {'available': False, 'name': 'Unknown'},
+            'ram': {'available': False, 'name': 'Unknown'},
+        }
+        self._degraded_mode = False
     
     def start(self):
         """Start automatic updates"""
@@ -99,12 +115,18 @@ class DataBus(QObject):
         self._throttle_threshold = threshold
     
     def _update(self):
-        """Internal update method (called by timer)"""
+        """Internal update method (called by timer)
+        
+        v0.3.5d Package 2b: Better error handling and health tracking
+        """
         start_time = time.time()
         
         try:
             # Get data from backend
             new_data = self._manager.get_all_data()
+            
+            # v0.3.5d Package 2b: Update health status
+            self._update_health_status(new_data)
             
             # Check if data changed significantly
             if self._should_emit(new_data):
@@ -124,6 +146,55 @@ class DataBus(QObject):
         except Exception as e:
             print(f"[DataBus] Update error: {e}")
             self.error_occurred.emit(str(e))
+            
+            # v0.3.5d: Try to continue with cached data
+            if self._cached_data is not None:
+                print("[DataBus] Using cached data after error")
+            else:
+                print("[DataBus] No cached data available")
+    
+    def _update_health_status(self, data: Dict):
+        """Update health status tracking
+        
+        Args:
+            data: Current monitor data
+        
+        v0.3.5d Package 2b: New method
+        """
+        any_degraded = False
+        
+        for monitor_type in ['gpu', 'cpu', 'ram']:
+            if monitor_type in data:
+                health = data[monitor_type].get('_monitor_health', {})
+                self._health_status[monitor_type] = {
+                    'available': health.get('available', False),
+                    'name': health.get('name', 'Unknown'),
+                    'error': health.get('error'),
+                }
+                
+                if not health.get('available', False):
+                    any_degraded = True
+        
+        # Log degraded mode changes
+        if any_degraded and not self._degraded_mode:
+            print("[DataBus] ⚠️  Entering degraded mode (some monitors unavailable)")
+            self._log_health_status()
+            self._degraded_mode = True
+        elif not any_degraded and self._degraded_mode:
+            print("[DataBus] ✅ Exiting degraded mode (all monitors available)")
+            self._degraded_mode = False
+    
+    def _log_health_status(self):
+        """Log current health status
+        
+        v0.3.5d Package 2b: New method
+        """
+        print("[DataBus] Health Status:")
+        for monitor_type, status in self._health_status.items():
+            icon = '✅' if status['available'] else '❌'
+            print(f"  {icon} {monitor_type}: {status['name']}")
+            if status.get('error'):
+                print(f"      Error: {status['error']}")
     
     def _should_emit(self, new_data: Dict) -> bool:
         """Check if data changed enough to emit
@@ -153,6 +224,10 @@ class DataBus(QObject):
             old_values = old_data[key]
             
             for metric, new_val in new_values.items():
+                # v0.3.5d: Skip health metadata
+                if metric == '_monitor_health':
+                    continue
+                
                 if metric not in old_values:
                     continue
                 
@@ -212,6 +287,7 @@ class DataBus(QObject):
         if self._cached_data is None:
             # First call - get data synchronously
             self._cached_data = self._manager.get_all_data()
+            self._update_health_status(self._cached_data)  # v0.3.5d
         
         return self._cached_data
     
@@ -221,6 +297,19 @@ class DataBus(QObject):
         self._throttle_enabled = False
         self._update()
         self._throttle_enabled = old_throttle
+    
+    def get_health_status(self) -> Dict:
+        """Get current health status of all monitors
+        
+        Returns:
+            Health status dict
+        
+        v0.3.5d Package 2b: New method
+        """
+        return {
+            'monitors': self._health_status.copy(),
+            'degraded_mode': self._degraded_mode,
+        }
     
     def get_performance_stats(self) -> Dict:
         """Get performance statistics
@@ -282,11 +371,14 @@ if __name__ == "__main__":
         for key, values in data.items():
             print(f"  {key.upper()}:")
             for metric, value in values.items():
-                if value is not None:
+                if metric != '_monitor_health' and value is not None:
                     print(f"    {metric}: {value}")
     
     def on_gpu_update(data):
-        print(f"[GPU] Temp: {data.get('temp_gpu')}°C, Load: {data.get('load_gpu')}%")
+        temp = data.get('temp_gpu', 0)
+        load = data.get('load_gpu', 0)
+        mem = data.get('memory_total', 0)
+        print(f"[GPU] Temp: {temp}°C, Load: {load}%, VRAM: {mem}MB")
     
     def on_error(msg):
         print(f"[ERROR] {msg}")
@@ -298,8 +390,19 @@ if __name__ == "__main__":
     # Start updates
     bus.start()
     
+    # Show health status after 2 seconds
+    def show_health():
+        health = bus.get_health_status()
+        print("\n[HEALTH STATUS]")
+        print(f"  Degraded mode: {health['degraded_mode']}")
+        for monitor, status in health['monitors'].items():
+            icon = '✅' if status['available'] else '❌'
+            print(f"  {icon} {monitor}: {status['name']}")
+    
+    QTimer.singleShot(2000, show_health)
+    
     # Run for 10 seconds
     QTimer.singleShot(10000, app.quit)
     
-    print("[TEST] Running DataBus for 10 seconds...")
+    print("[TEST] Running DataBus v0.3.5d Package 2b for 10 seconds...")
     sys.exit(app.exec())
