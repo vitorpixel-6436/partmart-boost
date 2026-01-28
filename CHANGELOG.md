@@ -4,6 +4,47 @@ All notable changes to PartMart Boost will be documented in this file.
 
 ---
 
+## [0.3.4-alpha] - 2026-01-28 - SECURITY PATCH 1
+
+### 🔒 SECURITY
+- **Path traversal prevention**: Database paths validated to prevent `../` attacks
+- **SQL injection prevention**: All queries use parameterized statements
+- **Input validation**: String length limits and character whitelisting
+- **Resource limits**: Database capped at 10MB, max 1000 records
+- **.gitignore**: Added to prevent sensitive file leaks (logs, config, data)
+- **Obsolete files removed**: Deleted `prototype_test.py`
+- **SECURITY.md**: Comprehensive security documentation added
+
+### ✨ ADDED
+- **Modular monitor architecture**:
+  - `BaseMonitor` - Abstract class for all monitors
+  - `GPUMonitor` - Clean NVIDIA GPU monitoring with hotspot temperature
+  - Graceful degradation when hardware unavailable
+  - Easy to add AMD GPU, Intel GPU support
+- **Configuration system** (`config.py`):
+  - JSON-based settings persistence
+  - Auto-detect system language
+  - ML optimizer toggle
+  - Update interval control
+- **Logging system** (`logger.py`):
+  - Logs to `logs/partmart.log`
+  - Automatic rotation (>10MB)
+  - Startup/shutdown tracking
+  - Optimization logging
+
+### 🔧 IMPROVED
+- **ai_optimizer.py**: Hardened with path validation and input sanitization
+- **Error handling**: Comprehensive try-catch blocks with logging
+- **Database security**: All queries parameterized, no string concatenation
+- **Documentation**: Added Part 1 refactoring docs
+
+### 🛠️ TECH STACK
+- Python 3.14.x compatible
+- Latest stable dependencies (see requirements.txt)
+- sklearn for optional ML features
+
+---
+
 ## [0.3.3-alpha] - 2026-01-28
 
 ### ✅ FIXED
@@ -90,14 +131,15 @@ All notable changes to PartMart Boost will be documented in this file.
 
 ## Future Roadmap
 
-### v0.3.4 (Planned: Jan 31)
-- AMD GPU support (temperature, load)
-- Unit tests (pytest, coverage >40%)
-- Integration with localization system in UI
+### v0.3.5 (Next: Jan 29-30)
+- CPU Monitor module
+- RAM Monitor module
+- Settings Dialog with language selector
+- Localization integration in UI
 
 ### v0.4.0 (Planned: Feb 2-3)
 - **First Stable Release**
-- Full code refactoring
+- Full code refactoring complete
 - Comprehensive documentation
 - PyInstaller .exe build
 - GitHub Release with installer
@@ -116,7 +158,14 @@ All notable changes to PartMart Boost will be documented in this file.
 ### Python Version Compatibility
 - **Recommended**: Python 3.11.x or 3.12.x
 - **Works**: Python 3.10+
-- **Issues**: Python 3.14 (PyQt6 DLL errors)
+- **Experimental**: Python 3.14 (some PyQt6 DLL issues)
+
+### Security
+See [SECURITY.md](SECURITY.md) for:
+- Vulnerability reporting
+- Security measures
+- Best practices
+- Security audit checklist
 
 ### Why Python?
 > "Shouldn't you use a faster language?"
