@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main entry point
 
-Version: 0.3.5a
+Version: 0.3.5b
 """
 import sys
 import os
@@ -16,7 +16,7 @@ from core.logger import get_logger
 
 def main():
     """Main entry point"""
-    print("[*] Launching PartMart Boost...")
+    print("[*] Launching PartMart Boost v0.3.5b...")
     print("\n" + "="*56)
     print()
     
@@ -25,7 +25,7 @@ def main():
     try:
         app = QApplication(sys.argv)
         app.setApplicationName("PartMart Boost")
-        app.setApplicationVersion("0.3.5a")
+        app.setApplicationVersion("0.3.5b")
         
         window = PartMartMainWindow()
         window.show()

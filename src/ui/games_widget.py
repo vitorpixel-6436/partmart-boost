@@ -1,13 +1,14 @@
 """Games Widget - Game profiles management UI
 
-Version: 0.3.5a
+Version: 0.3.5b
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QScrollArea, QFrame, QPushButton
+    QScrollArea, QFrame, QPushButton, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
+from ui.add_game_dialog import AddGameDialog
 
 
 class GameCard(QFrame):
@@ -151,13 +152,14 @@ class GamesWidget(QWidget):
         
         header.addStretch()
         
-        # Reload button
-        reload_btn = QPushButton("🔄 Обновить")
-        reload_btn.setFixedHeight(40)
-        reload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        reload_btn.setStyleSheet("""
+        # Add game button
+        add_btn = QPushButton("➕ Добавить игру")
+        add_btn.setFixedHeight(40)
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setStyleSheet("""
             QPushButton {
-                background: #E63946;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E63946, stop:1 #FF4757);
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -166,7 +168,29 @@ class GamesWidget(QWidget):
                 padding: 0 20px;
             }
             QPushButton:hover {
-                background: #FF4757;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #FF4757, stop:1 #E63946);
+            }
+        """)
+        add_btn.clicked.connect(self._add_game)
+        header.addWidget(add_btn)
+        
+        # Reload button
+        reload_btn = QPushButton("🔄 Обновить")
+        reload_btn.setFixedHeight(40)
+        reload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reload_btn.setStyleSheet("""
+            QPushButton {
+                background: #666666;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 0 20px;
+            }
+            QPushButton:hover {
+                background: #777777;
             }
         """)
         reload_btn.clicked.connect(self._reload_profiles)
@@ -186,6 +210,46 @@ class GamesWidget(QWidget):
         """)
         layout.addWidget(info)
         self.info_label = info
+        
+        # Quick help card
+        help_card = QFrame()
+        help_card.setStyleSheet("""
+            QFrame {
+                background-color: #1A1A1A;
+                border-left: 4px solid #E63946;
+                border-radius: 12px;
+                padding: 16px;
+            }
+        """)
+        help_layout = QVBoxLayout()
+        
+        help_title = QLabel("💡 Как добавить игру:")
+        help_title.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: 700;
+                color: #FFFFFF;
+                background: transparent;
+            }
+        """)
+        help_layout.addWidget(help_title)
+        
+        help_text = QLabel(
+            "1️⃣ Нажмите '➕ Добавить игру'\n"
+            "2️⃣ Введите название и имя .exe файла\n"
+            "3️⃣ Нажмите '✅ Добавить'\n"
+            "4️⃣ Перезапустите PartMart Boost"
+        )
+        help_text.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                color: #A0A0A0;
+                background: transparent;
+            }
+        """)
+        help_layout.addWidget(help_text)
+        help_card.setLayout(help_layout)
+        layout.addWidget(help_card)
         
         # Scroll area for game cards
         scroll = QScrollArea()
@@ -210,7 +274,10 @@ class GamesWidget(QWidget):
         
         # If no profiles
         if not self.game_cards:
-            empty_label = QLabel("📁 Нет загруженных профилей\n\nСоздайте профили в config/profiles/")
+            empty_label = QLabel(
+                "📁 Нет загруженных профилей\n\n"
+                "Нажмите '➕ Добавить игру' чтобы начать!"
+            )
             empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_label.setStyleSheet("""
                 QLabel {
@@ -228,6 +295,19 @@ class GamesWidget(QWidget):
         layout.addWidget(scroll, 1)
         
         self.setLayout(layout)
+    
+    def _add_game(self):
+        """Show add game dialog"""
+        dialog = AddGameDialog(self)
+        if dialog.exec():
+            # Show success and reload
+            QMessageBox.information(
+                self,
+                "Успех!",
+                "✅ Игра добавлена!\n\n"
+                "🔄 Нажмите 'Обновить' чтобы увидеть её в списке.\n"
+                "Либо перезапустите PartMart Boost."
+            )
     
     def _update_games(self):
         """Update running games status"""
@@ -254,7 +334,10 @@ class GamesWidget(QWidget):
             self.cards_layout.addWidget(card)
         
         if not self.game_cards:
-            empty_label = QLabel("📁 Нет загруженных профилей")
+            empty_label = QLabel(
+                "📁 Нет загруженных профилей\n\n"
+                "Нажмите '➕ Добавить игру' чтобы начать!"
+            )
             empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_label.setStyleSheet("""
                 QLabel {
@@ -270,6 +353,13 @@ class GamesWidget(QWidget):
         # Update info
         profiles_count = len(self.profile_manager.get_all_profiles())
         self.info_label.setText(f"📊 Загружено профилей: {profiles_count}")
+        
+        QMessageBox.information(
+            self,
+            "Успех!",
+            f"✅ Профили обновлены!\n\n"
+            f"Загружено: {profiles_count}"
+        )
 
 
 if __name__ == "__main__":
