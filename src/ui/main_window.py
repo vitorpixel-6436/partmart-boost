@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QStackedWidget, QApplication, QProgressBar, QGridLayout
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 import sys
 import os
@@ -30,11 +30,14 @@ class PartMartMainWindow(QMainWindow):
         
         # UI elements for updates
         self.gpu_temp_label = None
-        self.cpu_temp_label = None
-        self.ram_label = None
+        self.cpu_load_label = None
+        self.ram_value_label = None
         self.gpu_name_label = None
+        self.cpu_temp_label = None
+        self.ram_subtitle_label = None
         self.gpu_load_bar = None
         self.ram_usage_bar = None
+        self.cpu_load_bar = None
         
         self._setup_ui()
         
@@ -189,33 +192,27 @@ class PartMartMainWindow(QMainWindow):
         grid.setSpacing(20)
         
         # GPU Card
-        gpu_card = self._create_metric_card(
-            "🌡️ GPU",
+        gpu_card, self.gpu_temp_label, self.gpu_name_label, self.gpu_load_bar = self._create_metric_card(
+            "🌡️ GPU Temperature",
             "--°C",
             "Loading..."
         )
-        self.gpu_temp_label = gpu_card.findChild(QLabel, "value")
-        self.gpu_name_label = gpu_card.findChild(QLabel, "subtitle")
-        self.gpu_load_bar = gpu_card.findChild(QProgressBar)
         grid.addWidget(gpu_card, 0, 0)
         
         # RAM Card
-        ram_card = self._create_metric_card(
-            "🧠 RAM",
+        ram_card, self.ram_value_label, self.ram_subtitle_label, self.ram_usage_bar = self._create_metric_card(
+            "🧠 RAM Usage",
             "--GB",
             "Loading..."
         )
-        self.ram_label = ram_card.findChild(QLabel, "value")
-        self.ram_usage_bar = ram_card.findChild(QProgressBar)
         grid.addWidget(ram_card, 0, 1)
         
         # CPU Card
-        cpu_card = self._create_metric_card(
-            "💻 CPU",
+        cpu_card, self.cpu_load_label, self.cpu_temp_label, self.cpu_load_bar = self._create_metric_card(
+            "💻 CPU Load",
             "--%",
             "Loading..."
         )
-        self.cpu_temp_label = cpu_card.findChild(QLabel, "subtitle")
         grid.addWidget(cpu_card, 0, 2)
         
         layout.addLayout(grid)
@@ -240,7 +237,8 @@ class PartMartMainWindow(QMainWindow):
         page.setLayout(layout)
         return page
 
-    def _create_metric_card(self, title: str, value: str, subtitle: str) -> QFrame:
+    def _create_metric_card(self, title: str, value: str, subtitle: str):
+        """Create metric card and return (card, value_label, subtitle_label, progress_bar)"""
         card = QFrame()
         card.setFixedHeight(180)
         card.setStyleSheet("""
@@ -260,14 +258,13 @@ class PartMartMainWindow(QMainWindow):
         
         title_label = QLabel(title)
         title_label.setStyleSheet("""
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             color: #A0A0A0;
         """)
         layout.addWidget(title_label)
         
         value_label = QLabel(value)
-        value_label.setObjectName("value")
         value_label.setStyleSheet("""
             font-size: 36px;
             font-weight: 700;
@@ -276,7 +273,6 @@ class PartMartMainWindow(QMainWindow):
         layout.addWidget(value_label)
         
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setObjectName("subtitle")
         subtitle_label.setStyleSheet("""
             font-size: 12px;
             color: #666666;
@@ -290,7 +286,7 @@ class PartMartMainWindow(QMainWindow):
         layout.addWidget(progress)
         
         card.setLayout(layout)
-        return card
+        return card, value_label, subtitle_label, progress
 
     def _create_system_info_card(self) -> QFrame:
         card = QFrame()
@@ -436,43 +432,54 @@ class PartMartMainWindow(QMainWindow):
             cpu = data["cpu"]
             ram = data["ram"]
             
-            # Update GPU
+            # Update GPU card
             temp = gpu['temp_hotspot'] if gpu['temp_hotspot'] else gpu['temp_gpu']
             if self.gpu_temp_label:
                 self.gpu_temp_label.setText(f"{temp}°C")
             if self.gpu_name_label:
-                self.gpu_name_label.setText(f"{gpu['name'][:30]}..." if len(gpu['name']) > 30 else gpu['name'])
+                gpu_name_short = gpu['name'][:25] + "..." if len(gpu['name']) > 25 else gpu['name']
+                self.gpu_name_label.setText(gpu_name_short)
             if self.gpu_load_bar:
                 self.gpu_load_bar.setValue(int(gpu['load_gpu']))
+                self.gpu_load_bar.setFormat(f"Load: {int(gpu['load_gpu'])}%")
             
-            # Update RAM
-            if self.ram_label:
-                self.ram_label.setText(f"{ram['used']:.1f}GB")
+            # Update RAM card
+            if self.ram_value_label:
+                self.ram_value_label.setText(f"{ram['used']:.1f}GB")
+            if self.ram_subtitle_label:
+                self.ram_subtitle_label.setText(f"{ram['total']:.0f}GB total | {ram['speed']}MHz")
             if self.ram_usage_bar:
                 self.ram_usage_bar.setValue(int(ram['percent']))
+                self.ram_usage_bar.setFormat(f"{int(ram['percent'])}%")
             
-            # Update CPU
+            # Update CPU card
+            if self.cpu_load_label:
+                self.cpu_load_label.setText(f"{cpu['load']:.0f}%")
             if self.cpu_temp_label:
                 if cpu['temp']:
-                    self.cpu_temp_label.setText(f"Temp: {cpu['temp']:.0f}°C | Load: {cpu['load']:.0f}%")
+                    self.cpu_temp_label.setText(f"Temp: {cpu['temp']:.0f}°C | {cpu['count']} cores")
                 else:
-                    self.cpu_temp_label.setText(f"Load: {cpu['load']:.0f}%")
+                    self.cpu_temp_label.setText(f"{cpu['count']} cores | {cpu['freq']:.0f}MHz")
+            if self.cpu_load_bar:
+                self.cpu_load_bar.setValue(int(cpu['load']))
+                self.cpu_load_bar.setFormat(f"{int(cpu['load'])}%")
             
             # System info card
             if hasattr(self, 'gpu_info_label'):
-                self.gpu_info_label.setText(f"GPU: {gpu['name'][:25]}... | {gpu['clock_gpu']}MHz | {temp}°C")
+                self.gpu_info_label.setText(f"GPU: {gpu['name'][:20]}... | {gpu['clock_gpu']}MHz | {temp}°C | Load {gpu['load_gpu']:.0f}%")
             if hasattr(self, 'cpu_info_label'):
-                self.cpu_info_label.setText(f"CPU: {cpu['count']} cores | {cpu['load']:.0f}% | {cpu['freq']:.0f}MHz")
+                self.cpu_info_label.setText(f"CPU: {cpu['count']} cores | Load {cpu['load']:.0f}% | {cpu['freq']:.0f}MHz")
             
             # GPU page
             if hasattr(self, 'gpu_detail_label'):
                 self.gpu_detail_label.setText(
                     f"{gpu['name']}\n"
                     f"Temp: {temp}°C | Clock: {gpu['clock_gpu']}MHz | Memory: {gpu['clock_mem']}MHz\n"
-                    f"Load: {gpu['load_gpu']}% | Power: {gpu['power']:.1f}W"
+                    f"Load: {gpu['load_gpu']:.0f}% | Power: {gpu['power']:.1f}W"
                 )
             if hasattr(self, 'gpu_detail_load'):
                 self.gpu_detail_load.setValue(int(gpu['load_gpu']))
+                self.gpu_detail_load.setFormat(f"GPU Load: {int(gpu['load_gpu'])}%")
                 
         except Exception as e:
             print(f"Error updating UI: {e}")
@@ -484,7 +491,7 @@ class PartMartMainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setFont(QFont("Inter", 10))
+    app.setFont(QFont("Segoe UI", 10))
     window = PartMartMainWindow()
     window.show()
     sys.exit(app.exec())
