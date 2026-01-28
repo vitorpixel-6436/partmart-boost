@@ -1,5 +1,6 @@
-"""🎮 UI модуль PartMart Boost"""
+"""UI package for PartMart Boost (Steam-inspired)"""
 
-from .main_window import MainWindow
-
-__all__ = ['MainWindow']
+__all__ = [
+    "colors",
+    "typography",
+]
