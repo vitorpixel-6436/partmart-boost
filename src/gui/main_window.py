@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Window
 
-Version: 0.4.0-alpha
+Version: 0.3.5d+patch4
 
 Main application window with tabs and real-time monitoring.
 """
@@ -14,6 +14,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QAction, QIcon
+
+# Add parent to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import tab widgets
 from gui.dashboard_widget import DashboardWidget
@@ -35,7 +38,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        self.setWindowTitle("PartMart Boost v0.4.0-alpha")
+        self.setWindowTitle("PartMart Boost v0.3.5d+patch4")
         self.setMinimumSize(1200, 800)
         
         # Apply dark theme
@@ -51,7 +54,7 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(self._update_ui)
         self.update_timer.start(100)  # Update every 100ms
         
-        print("[MainWindow] Initialized")
+        print("[MainWindow] Initialized successfully")
     
     def _apply_dark_theme(self):
         """Apply dark theme stylesheet"""
@@ -222,10 +225,10 @@ class MainWindow(QMainWindow):
         self.logs_widget = LogsWidget()
         
         # Add tabs
-        self.tabs.addTab(self.dashboard_widget, "📊 Dashboard")
-        self.tabs.addTab(self.performance_widget, "⚙️ Performance")
-        self.tabs.addTab(self.settings_widget, "🔧 Settings")
-        self.tabs.addTab(self.logs_widget, "📝 Logs")
+        self.tabs.addTab(self.dashboard_widget, "Dashboard")
+        self.tabs.addTab(self.performance_widget, "Performance")
+        self.tabs.addTab(self.settings_widget, "Settings")
+        self.tabs.addTab(self.logs_widget, "Logs")
     
     def _create_status_bar(self):
         """Create status bar"""
@@ -233,15 +236,18 @@ class MainWindow(QMainWindow):
     
     def _update_ui(self):
         """Update UI (called by timer)"""
-        # Update dashboard
-        self.dashboard_widget.update_data()
-        
-        # Update performance
-        self.performance_widget.update_data()
-        
-        # Update status bar
-        fps = self.dashboard_widget.get_current_fps()
-        self.statusBar().showMessage(f"FPS: {fps:.1f} | Status: Running")
+        try:
+            # Update dashboard
+            self.dashboard_widget.update_data()
+            
+            # Update performance
+            self.performance_widget.update_data()
+            
+            # Update status bar
+            fps = self.dashboard_widget.get_current_fps()
+            self.statusBar().showMessage(f"FPS: {fps:.1f} | Status: Running")
+        except Exception as e:
+            print(f"[MainWindow] Update error: {e}")
     
     def _force_refresh(self):
         """Force refresh all data"""
@@ -251,7 +257,7 @@ class MainWindow(QMainWindow):
     def _show_about(self):
         """Show about dialog"""
         about_text = """
-        <h2>PartMart Boost v0.4.0-alpha</h2>
+        <h2>PartMart Boost v0.3.5d+patch4</h2>
         <p>Performance optimization tool with real-time monitoring.</p>
         <br>
         <p><b>Features:</b></p>
@@ -272,8 +278,17 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Handle window close"""
-        # Stop timer
-        self.update_timer.stop()
+        try:
+            # Stop timer
+            self.update_timer.stop()
+            
+            # Stop monitors
+            if hasattr(self.dashboard_widget, 'performance_monitor'):
+                self.dashboard_widget.performance_monitor.stop()
+            
+            print("[MainWindow] Closed successfully")
+        except Exception as e:
+            print(f"[MainWindow] Close error: {e}")
         
         # Accept close
         event.accept()

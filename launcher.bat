@@ -1,14 +1,14 @@
 @echo off
-chcp 65001 >nul
 REM PartMart Boost Launcher for Windows
-REM Version: 0.3.5d
+REM Version: 0.3.5d+patch4
+REM Note: Use launcher_simple.bat for simpler launch
 
 title PartMart Boost Launcher
 
 echo ========================================================
 echo.
-echo     🚀 PARTMART BOOST LAUNCHER
-echo     Version: 0.3.5d
+echo     PARTMART BOOST LAUNCHER
+echo     Version: 0.3.5d+patch4
 echo.
 echo ========================================================
 echo.
