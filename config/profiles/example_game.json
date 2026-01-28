@@ -1,0 +1,41 @@
+{
+  "_comment": "Example Game Profile - Copy and modify this for your games",
+  "_instructions": [
+    "1. Copy this file and rename it to your game name (e.g., 'csgo.json')",
+    "2. Change 'game_name' to the actual game name",
+    "3. Add all possible exe names in 'executable_names' (case insensitive)",
+    "4. Set 'enabled' to true when ready",
+    "5. Adjust priority, affinity, and other settings as needed",
+    "6. Restart PartMart Boost to detect the game"
+  ],
+  
+  "game_name": "Example Game",
+  "enabled": false,
+  "executable_names": [
+    "examplegame.exe",
+    "game.exe"
+  ],
+  
+  "priority": "high",
+  "affinity": "auto",
+  
+  "gpu": {
+    "enabled": true,
+    "power_limit": 100,
+    "temp_limit": 85,
+    "fan_curve": "aggressive"
+  },
+  
+  "ram": {
+    "enabled": true,
+    "cleanup_before_launch": true,
+    "reserved_mb": 2048
+  },
+  
+  "windows": {
+    "game_mode": true,
+    "fullscreen_optimizations": false,
+    "hags": true,
+    "game_bar": false
+  }
+}
