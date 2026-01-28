@@ -1,135 +1,263 @@
-# 🚀 Установка PartMart Boost
+# 📦 Installation Guide
 
-## 📦 Быстрая установка (Рекомендуется)
+## Quick Install (Recommended)
 
+### Windows
+
+1. **Clone repository:**
 ```bash
-# 1. Скачать проект
 git clone https://github.com/vitorpixel-6436/partmart-boost.git
 cd partmart-boost
-
-# 2. Установить зависимости
-pip install -r requirements.txt
-
-# 3. Запустить
-python src/main.py
 ```
 
-**Готово!** Приложение запущено.
+2. **Run launcher:**
+```bash
+launcher.bat
+```
+
+That's it! The launcher will:
+- Check Python version (3.10+ required, 3.11-3.12 recommended)
+- Create virtual environment
+- Install dependencies
+- Launch the application
 
 ---
 
-## ⚠️ Если возникли проблемы
+## Manual Installation
 
-### Проблема 1: Python не найден
+### Requirements
 
+- **Python 3.11 or 3.12** (recommended)
+  - Python 3.10+ works
+  - Python 3.14 may have PyQt6 DLL issues
+- **Windows 10/11** (primary support)
+- **NVIDIA GPU** (for GPU monitoring)
+- **10MB disk space** + dependencies
+
+### Step-by-Step
+
+1. **Install Python:**
+   - Download from https://www.python.org/downloads/
+   - **Important:** Check "Add Python to PATH" during installation
+
+2. **Clone repository:**
 ```bash
-python: command not found
-```
-
-**Решение:**
-1. Установите Python 3.11+ с [python.org](https://www.python.org/downloads/)
-2. При установке обязательно отметьте **"Add Python to PATH"**
-
-### Проблема 2: PyQt6 DLL error (Python 3.14)
-
-```
-ImportError: DLL load failed while importing QtCore
-```
-
-**Решение:**
-```bash
-# Переустановите PyQt6
-pip uninstall PyQt6 PyQt6-Qt6 -y
-pip install PyQt6>=6.8.0 PyQt6-Qt6>=6.8.0
-```
-
-### Проблема 3: nvidia-ml-py не устанавливается
-
-**Решение:**
-```bash
-# Установите по одному
-pip install nvidia-ml-py
-pip install psutil
-pip install PyQt6
-pip install wmi
-```
-
----
-
-## 💻 Требования
-
-### Минимальные:
-- **Python**: 3.11+ (рекомендуется 3.11 или 3.12)
-- **ОС**: Windows 10 (build 19043+) или Windows 11
-- **RAM**: 2GB+
-- **GPU**: Любая (для NVIDIA больше функций)
-
-### Рекомендуемые:
-- **Python**: 3.12.x
-- **GPU**: NVIDIA GTX 10xx+ или RTX
-- **Интернет**: Не требуется после установки
-
----
-
-## 🔧 Установка с venv (Опционально)
-
-Если вы хотите изолировать зависимости:
-
-```bash
-# 1. Создать venv
-python -m venv venv
-
-# 2. Активировать
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-
-# 3. Установить зависимости
-pip install -r requirements.txt
-
-# 4. Запустить
-python src/main.py
-
-# Для выхода:
-deactivate
-```
-
----
-
-## 🚀 Быстрый запуск в будущем
-
-После первой установки просто:
-
-```bash
+git clone https://github.com/vitorpixel-6436/partmart-boost.git
 cd partmart-boost
+```
+
+3. **Create virtual environment:**
+```bash
+python -m venv venv
+```
+
+4. **Activate virtual environment:**
+```bash
+# Windows
+venv\Scripts\activate
+
+# Linux/Mac
+source venv/bin/activate
+```
+
+5. **Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+6. **Run application:**
+```bash
 python src/main.py
 ```
 
-Или создайте ярлык Windows:
-1. ПКМ на рабочем столе → Создать ярлык
-2. Путь: `python "C:\path\to\partmart-boost\src\main.py"`
-3. Рабочая папка: `C:\path\to\partmart-boost`
-4. Иконка: `C:\path\to\partmart-boost\assets\icon.ico` (если есть)
+---
+
+## Troubleshooting
+
+### PyQt6 DLL Error (Python 3.14)
+
+**Error:** `ImportError: DLL load failed while importing QtCore`
+
+**Solution:** Use Python 3.11 or 3.12:
+```bash
+# Uninstall Python 3.14
+# Install Python 3.12 from python.org
+# Re-run launcher.bat
+```
+
+### GPU Not Detected
+
+**Symptoms:** GPU metrics show "N/A"
+
+**Solutions:**
+1. **Update NVIDIA drivers:**
+   - Visit https://nvidia.com/drivers
+   - Install latest driver
+   - Restart PC
+
+2. **Check CUDA:**
+```bash
+nvidia-smi
+```
+
+If command fails, NVIDIA drivers are not installed.
+
+### CPU Temperature Not Available
+
+**Symptom:** CPU temp shows "--"
+
+**Why:** Windows doesn't expose CPU temperature via standard APIs.
+
+**Solutions:**
+1. **Install OpenHardwareMonitor:**
+   - Download from https://openhardwaremonitor.org/
+   - Run as Administrator
+   - Keep running in background
+
+2. **Or just ignore:** CPU load is still tracked.
+
+### RAM Speed Shows Wrong Value
+
+**Symptom:** RAM speed shows 2133MHz instead of actual XMP speed.
+
+**Solution:** Enable XMP in BIOS:
+1. Restart PC
+2. Enter BIOS (usually Del, F2, or F12)
+3. Find "XMP" or "DOCP" setting
+4. Enable XMP Profile 1
+5. Save and exit
+
+### Application Won't Start
+
+**Check Python version:**
+```bash
+python --version
+```
+Should be 3.10+
+
+**Check dependencies:**
+```bash
+pip list
+```
+Should include PyQt6, psutil, nvidia-ml-py
+
+**View logs:**
+```bash
+type logs\partmart.log
+```
 
 ---
 
-## 🐛 Ошибки и поддержка
+## Advanced Options
 
-Если возникли проблемы:
-1. Проверьте [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-2. Создайте issue: [GitHub Issues](https://github.com/vitorpixel-6436/partmart-boost/issues)
-3. Приложите логи из `logs/partmart.log`
+### ML Optimizer (Beta)
+
+Enable machine learning optimization:
+
+1. Open **Settings** (menu bar)
+2. Check **"Enable AI-powered optimization"**
+3. Click **Save**
+
+**Requirements:**
+- `scikit-learn` package (auto-installed)
+- 50MB free RAM
+- Works 100% offline
+
+**What it does:**
+- Learns optimal GPU clock/voltage from your usage
+- Predicts safe overclocking values
+- Adapts to your specific hardware
+
+### Config File
+
+Manually edit `config/settings.json`:
+
+```json
+{
+  "language": "ru",              // auto, en, ru
+  "update_interval": 2000,       // milliseconds
+  "ml_optimizer_enabled": true,  // true/false
+  "log_level": "INFO"            // DEBUG, INFO, WARNING, ERROR
+}
+```
+
+### Logs
+
+Logs stored in `logs/partmart.log`
+
+**View recent logs:**
+```bash
+# Windows
+type logs\partmart.log | more
+
+# Linux/Mac
+tail -f logs/partmart.log
+```
+
+**Log rotation:**
+- Automatic when file >10MB
+- Keeps last 5 backups
+- Old logs: `logs/partmart_YYYYMMDD_HHMMSS.log`
 
 ---
 
-## ✅ Проверка установки
+## Uninstall
 
-После запуска вы должны увидеть:
-- ✅ Три карточки с метриками (GPU, RAM, CPU)
-- ✅ Красные цифры (температуры и проценты)
-- ✅ Прогресс-бары с загрузкой
-- ✅ Кнопку "БЫСТРЫЙ БУСТ"
-- ✅ Автообновление данных каждые 2 секунды
+1. Delete project folder:
+```bash
+rmdir /s /q partmart-boost
+```
 
-**Если что-то не работает** - сообщите в Issues!
+2. (Optional) Remove Python:
+   - Windows Settings → Apps → Python → Uninstall
+
+---
+
+## System Requirements
+
+### Minimum
+- Windows 10 (64-bit)
+- Python 3.10+
+- 4GB RAM
+- 100MB disk space
+- Any GPU (NVIDIA recommended)
+
+### Recommended
+- Windows 11 (64-bit)
+- Python 3.11 or 3.12
+- 8GB+ RAM
+- 500MB disk space
+- NVIDIA RTX GPU
+
+### Tested Configurations
+
+✅ Windows 11 + Python 3.12 + RTX 3060  
+✅ Windows 10 + Python 3.11 + GTX 1660  
+✅ Windows 11 + Python 3.10 + RTX 2060 Super  
+⚠️ Windows 11 + Python 3.14 + RTX 3060 (PyQt6 issues)  
+
+---
+
+## Building Executable (Coming Soon)
+
+**v0.4.0 will include:**
+- Standalone `.exe` file
+- No Python installation needed
+- NSIS installer
+- Auto-updates
+
+For now, use `launcher.bat` method.
+
+---
+
+## Getting Help
+
+- **Issues:** https://github.com/vitorpixel-6436/partmart-boost/issues
+- **Docs:** https://github.com/vitorpixel-6436/partmart-boost
+- **Logs:** Check `logs/partmart.log` first
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE)
