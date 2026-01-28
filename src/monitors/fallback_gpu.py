@@ -99,6 +99,14 @@ class FallbackGPUMonitor:
             except Exception as e:
                 print(f"[WARN] glxinfo detection failed: {e}")
     
+    def get_name(self) -> str:
+        """Get GPU name/identifier
+        
+        Returns:
+            GPU name string
+        """
+        return self.gpu_name if self.available else "No GPU detected (Fallback)"
+    
     def get_gpu_data_windows(self) -> Dict:
         """Get GPU data on Windows using native APIs"""
         data = {
@@ -231,6 +239,14 @@ class FallbackGPUMonitor:
                 "fan_speed": 0,
             }
     
+    def get_data(self) -> Dict:
+        """Alias for get_gpu_data() for interface compatibility
+        
+        Returns:
+            Dictionary with GPU metrics
+        """
+        return self.get_gpu_data()
+    
     def is_available(self) -> bool:
         """Check if GPU monitoring is available"""
         return self.available
@@ -240,6 +256,9 @@ if __name__ == "__main__":
     print("[TEST] Testing FallbackGPUMonitor...")
     
     monitor = FallbackGPUMonitor()
+    
+    print(f"[INFO] GPU Name: {monitor.get_name()}")
+    print(f"[INFO] Available: {monitor.is_available()}")
     
     if monitor.is_available():
         print("[PASS] GPU detected")
