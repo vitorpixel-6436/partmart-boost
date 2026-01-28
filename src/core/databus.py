@@ -1,191 +1,80 @@
-"""DataBus - Event-driven data layer between backend and frontend
+"""DataBus - Event-driven middleware between backend and frontend
 
-BOTTLENECK FIX: 
-- Batched monitor polling (single threaded, non-blocking)
-- Cached results (minimize redundant psutil calls)
-- Event-driven updates (UI subscribes, doesn't poll)
-- Decoupled architecture (backend changes don't affect frontend)
+Architecture:
+    FRONTEND (UI Widgets) 
+        ↓ subscribes to signals
+    MIDDLEWARE (DataBus) 
+        ↓ polls monitors
+    BACKEND (Monitors)
 
-ARCHITECTURE:
-  Monitors → DataBus → UI
-  (Backend)  (Middleware) (Frontend)
+Benefits:
+- Frontend never calls hardware directly
+- Backend changes don't break UI
+- Event-driven reactivity
+- Performance caching
+- Easy to add new monitors
 """
 import time
-from typing import Dict, Callable, Optional, Any
+from typing import Dict, Optional, Callable
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
+from monitors.manager import MonitorManager
 
 class DataBus(QObject):
-    """Centralized data distribution system
+    """Central event bus for system data
     
-    Responsibilities:
-    1. Poll all monitors at configurable interval
-    2. Cache results to minimize overhead
-    3. Emit signals when data changes
-    4. Provide synchronous data access for UI
-    
-    Benefits:
-    - Frontend doesn't access monitors directly
-    - Changes to monitors don't break UI
-    - Single polling loop for all monitors
-    - Efficient caching and batching
+    Emits signals when data changes:
+    - data_updated: All data updated
+    - gpu_updated: GPU data changed
+    - cpu_updated: CPU data changed
+    - ram_updated: RAM data changed
+    - error_occurred: Error happened
     """
     
-    # Signals for reactive UI updates
-    data_updated = pyqtSignal(dict)  # All data
+    # Signals
+    data_updated = pyqtSignal(dict)  # Full data
     gpu_updated = pyqtSignal(dict)   # GPU only
     cpu_updated = pyqtSignal(dict)   # CPU only
     ram_updated = pyqtSignal(dict)   # RAM only
-    error_occurred = pyqtSignal(str)  # Errors
+    error_occurred = pyqtSignal(str) # Errors
     
-    def __init__(self, update_interval_ms: int = 2000):
-        """Initialize DataBus
-        
+    def __init__(self, update_interval: int = 2000):
+        """
         Args:
-            update_interval_ms: Polling interval in milliseconds (default: 2000ms = 2s)
+            update_interval: Update interval in milliseconds (default: 2000ms = 2s)
         """
         super().__init__()
         
-        # Configuration
-        self.update_interval_ms = update_interval_ms
+        # Backend
+        self._manager = MonitorManager()
         
-        # Cached data
-        self._data: Dict[str, Any] = {
-            'gpu': {},
-            'cpu': {},
-            'ram': {},
-            'timestamp': 0,
-        }
+        # Cache
+        self._cached_data: Optional[Dict] = None
+        self._last_update_time = 0
         
-        # Monitors (lazy loading)
-        self._monitors = {
-            'gpu': None,
-            'cpu': None,
-            'ram': None,
-        }
-        
-        # Timer for polling
+        # Update timer
         self._timer = QTimer()
-        self._timer.timeout.connect(self._poll_monitors)
+        self._timer.timeout.connect(self._update)
+        self._update_interval = update_interval
         
         # Performance tracking
-        self._last_poll_duration = 0
-        self._poll_count = 0
+        self._update_count = 0
+        self._total_time = 0.0
         
-        # Initialize monitors
-        self._init_monitors()
-    
-    def _init_monitors(self):
-        """Initialize all monitors (lazy)"""
-        try:
-            # Import monitors (only if not already loaded)
-            from monitors.gpu_monitor import get_gpu_monitor
-            from monitors.cpu_monitor import get_cpu_monitor
-            from monitors.ram_monitor import get_ram_monitor
-            
-            self._monitors['gpu'] = get_gpu_monitor()
-            self._monitors['cpu'] = get_cpu_monitor()
-            self._monitors['ram'] = get_ram_monitor()
-            
-            print("[INFO] DataBus: All monitors initialized")
-            
-        except Exception as e:
-            print(f"[ERROR] DataBus: Monitor initialization failed: {e}")
-            self.error_occurred.emit(f"Monitor init failed: {e}")
-    
-    def _poll_monitors(self):
-        """Poll all monitors and update cache
-        
-        OPTIMIZATION: Batch all monitor queries in single call
-        """
-        start_time = time.time()
-        
-        try:
-            # OPTIMIZATION: Parallel data collection (monitors have their own caches)
-            new_data = {
-                'gpu': self._monitors['gpu'].get_data() if self._monitors['gpu'] else {},
-                'cpu': self._monitors['cpu'].get_data() if self._monitors['cpu'] else {},
-                'ram': self._monitors['ram'].get_data() if self._monitors['ram'] else {},
-                'timestamp': time.time(),
-            }
-            
-            # Check if data actually changed (avoid unnecessary UI updates)
-            data_changed = self._has_significant_change(self._data, new_data)
-            
-            # Update cache
-            self._data = new_data
-            
-            # Emit signals only if data changed significantly
-            if data_changed:
-                self.data_updated.emit(self._data)
-                self.gpu_updated.emit(self._data['gpu'])
-                self.cpu_updated.emit(self._data['cpu'])
-                self.ram_updated.emit(self._data['ram'])
-            
-            # Performance tracking
-            self._last_poll_duration = (time.time() - start_time) * 1000  # ms
-            self._poll_count += 1
-            
-            # Log performance issues
-            if self._last_poll_duration > 100:  # > 100ms is slow
-                print(f"[WARN] DataBus: Slow poll detected ({self._last_poll_duration:.1f}ms)")
-            
-        except Exception as e:
-            print(f"[ERROR] DataBus: Poll failed: {e}")
-            self.error_occurred.emit(f"Data poll failed: {e}")
-    
-    def _has_significant_change(self, old_data: Dict, new_data: Dict, threshold: float = 0.5) -> bool:
-        """Check if data changed significantly
-        
-        OPTIMIZATION: Avoid UI updates for minor fluctuations
-        
-        Args:
-            old_data: Previous data
-            new_data: New data
-            threshold: Minimum change threshold (e.g., 0.5% for percentages)
-        
-        Returns:
-            True if significant change detected
-        """
-        # Always update on first poll
-        if not old_data or old_data.get('timestamp', 0) == 0:
-            return True
-        
-        # Check each metric for significant change
-        try:
-            # GPU temp change > 1°C
-            if abs(new_data.get('gpu', {}).get('temp_gpu', 0) - old_data.get('gpu', {}).get('temp_gpu', 0)) > 1:
-                return True
-            
-            # CPU/RAM usage change > 1%
-            if abs(new_data.get('cpu', {}).get('load', 0) - old_data.get('cpu', {}).get('load', 0)) > 1:
-                return True
-            
-            if abs(new_data.get('ram', {}).get('percent', 0) - old_data.get('ram', {}).get('percent', 0)) > 1:
-                return True
-            
-            # Update every 10 polls even if no change (keep UI alive)
-            if self._poll_count % 10 == 0:
-                return True
-            
-            return False
-            
-        except Exception:
-            # On error, update anyway
-            return True
+        # Throttling (only emit if changed significantly)
+        self._throttle_enabled = True
+        self._throttle_threshold = 0.01  # 1% change
     
     def start(self):
-        """Start polling monitors"""
-        print(f"[INFO] DataBus: Starting with {self.update_interval_ms}ms interval")
-        
-        # Do initial poll immediately
-        self._poll_monitors()
-        
-        # Start timer
-        self._timer.start(self.update_interval_ms)
+        """Start automatic updates"""
+        print(f"[DataBus] Starting updates every {self._update_interval}ms")
+        # First update (synchronous)
+        self._update()
+        # Start timer for subsequent updates
+        self._timer.start(self._update_interval)
     
     def stop(self):
-        """Stop polling monitors"""
-        print("[INFO] DataBus: Stopping")
+        """Stop automatic updates"""
+        print("[DataBus] Stopping updates")
         self._timer.stop()
     
     def set_update_interval(self, interval_ms: int):
@@ -194,96 +83,223 @@ class DataBus(QObject):
         Args:
             interval_ms: New interval in milliseconds
         """
-        self.update_interval_ms = interval_ms
-        
+        self._update_interval = interval_ms
         if self._timer.isActive():
             self._timer.setInterval(interval_ms)
-            print(f"[INFO] DataBus: Update interval changed to {interval_ms}ms")
+            print(f"[DataBus] Update interval changed to {interval_ms}ms")
+    
+    def set_throttling(self, enabled: bool, threshold: float = 0.01):
+        """Enable/disable smart update throttling
+        
+        Args:
+            enabled: Enable throttling
+            threshold: Minimum change to emit update (default: 1%)
+        """
+        self._throttle_enabled = enabled
+        self._throttle_threshold = threshold
+    
+    def _update(self):
+        """Internal update method (called by timer)"""
+        start_time = time.time()
+        
+        try:
+            # Get data from backend
+            new_data = self._manager.get_all_data()
+            
+            # Check if data changed significantly
+            if self._should_emit(new_data):
+                # Update cache
+                old_data = self._cached_data
+                self._cached_data = new_data
+                
+                # Emit signals
+                self._emit_updates(new_data, old_data)
+            
+            # Track performance
+            elapsed = time.time() - start_time
+            self._last_update_time = elapsed
+            self._update_count += 1
+            self._total_time += elapsed
+        
+        except Exception as e:
+            print(f"[DataBus] Update error: {e}")
+            self.error_occurred.emit(str(e))
+    
+    def _should_emit(self, new_data: Dict) -> bool:
+        """Check if data changed enough to emit
+        
+        Args:
+            new_data: New data to check
+        
+        Returns:
+            True if should emit update
+        """
+        # First update always emits
+        if self._cached_data is None:
+            return True
+        
+        # Throttling disabled - always emit
+        if not self._throttle_enabled:
+            return True
+        
+        # Check if any value changed significantly
+        old_data = self._cached_data
+        
+        for key in ['gpu', 'cpu', 'ram']:
+            if key not in new_data or key not in old_data:
+                continue
+            
+            new_values = new_data[key]
+            old_values = old_data[key]
+            
+            for metric, new_val in new_values.items():
+                if metric not in old_values:
+                    continue
+                
+                old_val = old_values[metric]
+                
+                # Skip None/string values
+                if new_val is None or old_val is None:
+                    continue
+                if isinstance(new_val, str) or isinstance(old_val, str):
+                    continue
+                
+                # Check percentage change
+                try:
+                    if old_val == 0:
+                        # Avoid division by zero
+                        if new_val != 0:
+                            return True
+                    else:
+                        change = abs((new_val - old_val) / old_val)
+                        if change > self._throttle_threshold:
+                            return True
+                except (TypeError, ZeroDivisionError):
+                    pass
+        
+        # No significant change
+        return False
+    
+    def _emit_updates(self, new_data: Dict, old_data: Optional[Dict]):
+        """Emit update signals
+        
+        Args:
+            new_data: New data
+            old_data: Previous data (for change detection)
+        """
+        # Full update
+        self.data_updated.emit(new_data)
+        
+        # Individual updates (only if changed)
+        if 'gpu' in new_data:
+            if old_data is None or new_data['gpu'] != old_data.get('gpu'):
+                self.gpu_updated.emit(new_data['gpu'])
+        
+        if 'cpu' in new_data:
+            if old_data is None or new_data['cpu'] != old_data.get('cpu'):
+                self.cpu_updated.emit(new_data['cpu'])
+        
+        if 'ram' in new_data:
+            if old_data is None or new_data['ram'] != old_data.get('ram'):
+                self.ram_updated.emit(new_data['ram'])
     
     def get_data(self) -> Dict:
-        """Get cached data (synchronous)
+        """Get current cached data (synchronous)
         
         Returns:
-            Dictionary with all system data
+            Current system data (may be slightly outdated)
         """
-        return self._data.copy()
-    
-    def get_gpu_data(self) -> Dict:
-        """Get cached GPU data"""
-        return self._data.get('gpu', {}).copy()
-    
-    def get_cpu_data(self) -> Dict:
-        """Get cached CPU data"""
-        return self._data.get('cpu', {}).copy()
-    
-    def get_ram_data(self) -> Dict:
-        """Get cached RAM data"""
-        return self._data.get('ram', {}).copy()
-    
-    def get_performance_stats(self) -> Dict:
-        """Get DataBus performance statistics
+        if self._cached_data is None:
+            # First call - get data synchronously
+            self._cached_data = self._manager.get_all_data()
         
-        Returns:
-            Dict with performance metrics
-        """
-        return {
-            'last_poll_duration_ms': self._last_poll_duration,
-            'poll_count': self._poll_count,
-            'update_interval_ms': self.update_interval_ms,
-            'avg_poll_rate': self._poll_count / (self._data.get('timestamp', 1) or 1),
-        }
+        return self._cached_data
     
     def force_update(self):
-        """Force immediate data update"""
-        print("[INFO] DataBus: Force update requested")
-        self._poll_monitors()
-
-# Global singleton
-_databus = None
-
-def get_databus(update_interval_ms: int = 2000) -> DataBus:
-    """Get global DataBus instance
+        """Force immediate update (bypass throttling)"""
+        old_throttle = self._throttle_enabled
+        self._throttle_enabled = False
+        self._update()
+        self._throttle_enabled = old_throttle
     
-    Args:
-        update_interval_ms: Update interval (only used on first call)
+    def get_performance_stats(self) -> Dict:
+        """Get performance statistics
+        
+        Returns:
+            Dictionary with performance metrics
+        """
+        if self._update_count == 0:
+            return {
+                "avg_time_ms": 0,
+                "last_time_ms": 0,
+                "total_updates": 0,
+                "update_interval_ms": self._update_interval,
+            }
+        
+        avg_time = (self._total_time / self._update_count) * 1000
+        last_time = self._last_update_time * 1000
+        
+        return {
+            "avg_time_ms": avg_time,
+            "last_time_ms": last_time,
+            "total_updates": self._update_count,
+            "update_interval_ms": self._update_interval,
+        }
+
+# Singleton instance
+_databus_instance: Optional[DataBus] = None
+
+def get_databus() -> DataBus:
+    """Get singleton DataBus instance
     
     Returns:
-        Global DataBus instance
+        DataBus instance
     """
-    global _databus
-    if _databus is None:
-        _databus = DataBus(update_interval_ms)
-    return _databus
+    global _databus_instance
+    if _databus_instance is None:
+        _databus_instance = DataBus()
+    return _databus_instance
+
+def reset_databus():
+    """Reset DataBus singleton (for testing)"""
+    global _databus_instance
+    if _databus_instance is not None:
+        _databus_instance.stop()
+        _databus_instance = None
 
 if __name__ == "__main__":
-    # Test
-    import sys
+    # Test DataBus
     from PyQt6.QtWidgets import QApplication
-    
-    print("[TEST] Testing DataBus...")
+    import sys
     
     app = QApplication(sys.argv)
     
-    # Create DataBus
-    bus = DataBus(update_interval_ms=1000)  # 1 second for testing
+    bus = get_databus()
     
-    # Subscribe to updates
+    # Connect signals
     def on_data_update(data):
-        print(f"[DATA] GPU: {data['gpu'].get('temp_gpu', 0)}°C, "
-              f"CPU: {data['cpu'].get('load', 0):.1f}%, "
-              f"RAM: {data['ram'].get('percent', 0):.1f}%")
+        print("\n[DATA UPDATE]")
+        for key, values in data.items():
+            print(f"  {key.upper()}:")
+            for metric, value in values.items():
+                if value is not None:
+                    print(f"    {metric}: {value}")
     
-    def on_error(error):
-        print(f"[ERROR] {error}")
+    def on_gpu_update(data):
+        print(f"[GPU] Temp: {data.get('temp_gpu')}°C, Load: {data.get('load_gpu')}%")
+    
+    def on_error(msg):
+        print(f"[ERROR] {msg}")
     
     bus.data_updated.connect(on_data_update)
+    bus.gpu_updated.connect(on_gpu_update)
     bus.error_occurred.connect(on_error)
     
-    # Start
+    # Start updates
     bus.start()
     
-    # Run for 5 seconds
-    print("[TEST] Running for 5 seconds...")
-    QTimer.singleShot(5000, app.quit)
+    # Run for 10 seconds
+    QTimer.singleShot(10000, app.quit)
     
+    print("[TEST] Running DataBus for 10 seconds...")
     sys.exit(app.exec())
