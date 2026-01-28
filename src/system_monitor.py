@@ -1,5 +1,9 @@
 """Real-time system monitoring for GPU, CPU, RAM"""
-import pynvml
+try:
+    import pynvml
+except ImportError:
+    pass
+
 import psutil
 import platform
 from typing import Dict, Optional
