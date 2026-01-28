@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main entry point
 
-Version: 0.3.5b
+Version: 0.3.5d - Package 2 Complete
+
+Package 2 improvements:
+- Schema consistency across all monitors
+- Enhanced APIs (40+ new methods)
+- Health tracking and auto-recovery
+- Advanced event system (9 new signals)
+- Data history buffering
+- Adaptive behavior
 """
 import sys
 import os
@@ -16,8 +24,16 @@ from core.logger import get_logger
 
 def main():
     """Main entry point"""
-    print("[*] Launching PartMart Boost v0.3.5b...")
+    print("[*] Launching PartMart Boost v0.3.5d Package 2...")
     print("\n" + "="*56)
+    print("📦 Package 2 Complete:")
+    print("  ✅ Schema consistency (RAM/GPU/CPU)")
+    print("  ✅ Enhanced APIs (40+ methods)")
+    print("  ✅ Health tracking + auto-recovery")
+    print("  ✅ Advanced events (9 signals)")
+    print("  ✅ Data history (60 samples)")
+    print("  ✅ Adaptive intervals")
+    print("="*56)
     print()
     
     logger = get_logger()
@@ -25,7 +41,7 @@ def main():
     try:
         app = QApplication(sys.argv)
         app.setApplicationName("PartMart Boost")
-        app.setApplicationVersion("0.3.5b")
+        app.setApplicationVersion("0.3.5d")
         
         window = PartMartMainWindow()
         window.show()
