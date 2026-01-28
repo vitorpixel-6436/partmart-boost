@@ -1,4 +1,7 @@
-"""Main window with full localization and modern UI"""
+"""Main window with full localization and modern UI
+
+Version: 0.3.5
+"""
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QStackedWidget, QApplication, QProgressBar, 
@@ -142,7 +145,10 @@ class MetricCard(QFrame):
         self.progress.repaint()
 
 class PartMartMainWindow(QMainWindow):
-    """Main application window with full localization"""
+    """Main application window with full localization
+    
+    Version: 0.3.5
+    """
 
     def __init__(self):
         super().__init__()
@@ -189,7 +195,7 @@ class PartMartMainWindow(QMainWindow):
         self._create_menu_bar()
         
         # Log startup
-        self.logger.log_startup("0.4.0-alpha")
+        self.logger.log_startup("0.3.5")
         
         # Auto-update timer
         update_interval = self.config.get_update_interval()
@@ -205,7 +211,7 @@ class PartMartMainWindow(QMainWindow):
             self.game_timer.start(3000)  # Check every 3 seconds
 
     def _setup_ui(self):
-        self.setWindowTitle(t('window_title', version='0.4.0'))
+        self.setWindowTitle(t('window_title', version='0.3.5'))
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 700)
         
@@ -305,7 +311,7 @@ class PartMartMainWindow(QMainWindow):
         layout.setContentsMargins(32, 16, 32, 16)
         
         # Logo
-        logo = QLabel("🐉 PartMart Boost")
+        logo = QLabel("🐉 PartMart Boost v0.3.5")
         logo.setStyleSheet("""
             font-size: 28px;
             font-weight: 700;
@@ -322,7 +328,7 @@ class PartMartMainWindow(QMainWindow):
             ("home", "🏠", 0),
             ("gpu_control", "🎮", 1),
             ("ram_tuner", "🧠", 2),
-            ("games", "🎮", 3),  # NEW!
+            ("games", "🎮", 3),
         ]
         
         for key, icon, index in tabs:
@@ -347,10 +353,9 @@ class PartMartMainWindow(QMainWindow):
             ("home", "🏠"),
             ("gpu_control", "🎮"),
             ("ram_tuner", "🧠"),
-            ("games", "🎮"),  # NEW!
+            ("games", "🎮"),
         ]
         for btn, (key, icon) in zip(self.nav_buttons, tabs):
-            # For "games" key, use fallback if translation missing
             text = t(key) if key != 'games' else "Игры"
             btn.setText(f"{icon} {text}")
 
@@ -422,6 +427,7 @@ class PartMartMainWindow(QMainWindow):
         self.boost_btn = QPushButton()
         self.boost_btn.setFixedHeight(60)
         self.boost_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Removed transform property that causes CSS error
         self.boost_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -587,7 +593,7 @@ class PartMartMainWindow(QMainWindow):
         
         # Set text
         title_text = t(title_key) if title_key != 'games' else "Игры"
-        desc_text = desc_key  # Use as-is for now
+        desc_text = desc_key
         title_label.setText(title_text)
         desc_label.setText(desc_text)
         
@@ -699,9 +705,9 @@ class PartMartMainWindow(QMainWindow):
             gpu_data = self.system_monitor.get_gpu_data()
             if gpu_data:
                 # Safe get with defaults
-                temp = gpu_data.get('temperature') or gpu_data.get('temp_gpu') or 0
-                load = gpu_data.get('load') or gpu_data.get('load_gpu') or 0
-                clock = gpu_data.get('clock') or gpu_data.get('clock_gpu') or 0
+                temp = gpu_data.get('temperature') or 0
+                load = gpu_data.get('load') or 0
+                clock = gpu_data.get('clock') or 0
                 name = gpu_data.get('name', 'N/A')
                 
                 # Convert to int safely
@@ -715,14 +721,14 @@ class PartMartMainWindow(QMainWindow):
                 
                 self.gpu_info_label.setText(
                     f"GPU: {name} | "
-                    f"{t('clock') if hasattr(self, 'config') else 'Clock'}: {clock} MHz"
+                    f"Clock: {clock} MHz" if clock > 0 else f"GPU: {name}"
                 )
             
             # RAM
             ram_data = self.system_monitor.get_ram_data()
             if ram_data:
-                used = ram_data.get('used_gb') or ram_data.get('used', 0) / (1024**3)
-                total = ram_data.get('total_gb') or ram_data.get('total', 0) / (1024**3)
+                used = ram_data.get('used_gb', 0)
+                total = ram_data.get('total_gb', 0)
                 percent = ram_data.get('percent', 0)
                 
                 # Convert to numbers safely
@@ -746,21 +752,15 @@ class PartMartMainWindow(QMainWindow):
                 cores = int(cores) if cores else 0
                 
                 self.cpu_card.set_value(f"{load}%" if load > 0 else "--")
-                self.cpu_card.set_subtitle(
-                    t('cpu_cores', count=cores) if hasattr(self, 'config') and cores > 0 
-                    else f"{cores} cores" if cores > 0 else "--"
-                )
+                self.cpu_card.set_subtitle(f"{cores} cores" if cores > 0 else "--")
                 self.cpu_card.set_progress(load, f"{load}%" if load > 0 else "--")
                 
                 self.cpu_info_label.setText(
-                    f"CPU: {name} | "
-                    f"{t('load') if hasattr(self, 'config') else 'Load'}: {load}%"
+                    f"CPU: {name} | Load: {load}%"
                 )
             
             # Update info card title
-            self.info_title.setText(
-                f"📊 {t('system_metrics') if hasattr(self, 'config') else 'System Metrics'}"
-            )
+            self.info_title.setText("📊 System Metrics")
         
         except Exception as e:
             print(f"ERROR: Failed to update system data: {e}")
@@ -823,7 +823,7 @@ class PartMartMainWindow(QMainWindow):
 
     def _refresh_ui_texts(self):
         """Refresh all UI texts with new language"""
-        self.setWindowTitle(t('window_title', version='0.4.0'))
+        self.setWindowTitle(t('window_title', version='0.3.5'))
         self._update_nav_texts()
         
         # Update cards
@@ -862,7 +862,7 @@ class PartMartMainWindow(QMainWindow):
         QMessageBox.about(
             self,
             t('about'),
-            t('about_text', version='0.4.0')
+            t('about_text', version='0.3.5')
         )
 
     def closeEvent(self, event):
