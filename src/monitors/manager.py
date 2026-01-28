@@ -1,47 +1,67 @@
-"""Monitor Manager for unified system monitoring
-PERFORMANCE: Orchestrates all monitors efficiently
+"""Monitor Manager for unified system monitoring with sovereignty fallback.
+
+PERFORMANCE: Orchestrates all monitors efficiently with automatic fallback.
+
+Supports:
+- FULL mode: psutil + pynvml + wmi
+- NATIVE mode: Native OS APIs (WMIC, sysfs, ctypes)
+- MINIMAL mode: Stub monitors (safe defaults)
 """
 import time
 from typing import Dict, List, Optional
 from monitors import BaseMonitor
-from monitors.gpu_monitor import GPUMonitor
-from monitors.cpu_monitor import CPUMonitor
-from monitors.ram_monitor import RAMMonitor
+from core.sovereignty import SovereigntyManager
+
 
 class MonitorManager:
-    """Manages all system monitors with efficient data collection"""
+    """Manages all system monitors with sovereignty fallback."""
     
-    def __init__(self):
+    def __init__(self, prefer_native: bool = False):
+        """
+        Initialize monitor manager.
+        
+        Args:
+            prefer_native: If True, use native monitors for max sovereignty
+        """
+        self.prefer_native = prefer_native
+        self.sovereignty = SovereigntyManager(prefer_native=prefer_native)
         self.monitors: Dict[str, BaseMonitor] = {}
+        
         self._init_monitors()
         
         # Performance tracking
         self._last_update_time = 0
         self._update_count = 0
         self._total_time = 0.0
+        
+        # Print sovereignty status
+        print(f"\n[MonitorManager] Sovereignty Score: {self.sovereignty.get_sovereignty_score()}/100")
     
     def _init_monitors(self):
-        """Initialize all monitors"""
+        """Initialize all monitors with sovereignty fallback."""
         try:
-            self.monitors['gpu'] = GPUMonitor()
-            print(f"[OK] GPU Monitor: {self.monitors['gpu'].is_available()}")
+            self.monitors['gpu'] = self.sovereignty.get_gpu_monitor()
+            print(f"[OK] GPU Monitor: {self.monitors['gpu'].get_name()}")
+            print(f"     Available: {self.monitors['gpu'].is_available()}")
         except Exception as e:
             print(f"[ERROR] GPU Monitor init failed: {e}")
         
         try:
-            self.monitors['cpu'] = CPUMonitor()
-            print(f"[OK] CPU Monitor: {self.monitors['cpu'].is_available()}")
+            self.monitors['cpu'] = self.sovereignty.get_cpu_monitor()
+            print(f"[OK] CPU Monitor: {self.monitors['cpu'].get_name()}")
+            print(f"     Available: {self.monitors['cpu'].is_available()}")
         except Exception as e:
             print(f"[ERROR] CPU Monitor init failed: {e}")
         
         try:
-            self.monitors['ram'] = RAMMonitor()
-            print(f"[OK] RAM Monitor: {self.monitors['ram'].is_available()}")
+            self.monitors['ram'] = self.sovereignty.get_ram_monitor()
+            print(f"[OK] RAM Monitor: {self.monitors['ram'].get_name()}")
+            print(f"     Available: {self.monitors['ram'].is_available()}")
         except Exception as e:
             print(f"[ERROR] RAM Monitor init failed: {e}")
     
     def get_all_data(self) -> Dict:
-        """Get data from all monitors (optimized)
+        """Get data from all monitors (optimized).
         
         Returns:
             Dictionary with all system data
@@ -70,7 +90,7 @@ class MonitorManager:
         return data
     
     def _get_unavailable_data(self, monitor_type: str) -> Dict:
-        """Get placeholder data for unavailable monitor
+        """Get placeholder data for unavailable monitor.
         
         Args:
             monitor_type: Type of monitor (gpu, cpu, ram)
@@ -92,6 +112,7 @@ class MonitorManager:
             }
         elif monitor_type == 'cpu':
             return {
+                "name": "Unknown CPU",
                 "load": 0,
                 "temp": None,
                 "freq": 0,
@@ -107,13 +128,14 @@ class MonitorManager:
                 "free": 0,
                 "percent": 0,
                 "speed": 0,
+                "type": "Unknown",
                 "xmp_enabled": False,
             }
         
         return {}
     
     def get_performance_stats(self) -> Dict:
-        """Get performance statistics
+        """Get performance statistics.
         
         Returns:
             Dictionary with perf stats
@@ -134,8 +156,16 @@ class MonitorManager:
             "total_updates": self._update_count,
         }
     
+    def get_sovereignty_status(self) -> Dict:
+        """Get sovereignty status.
+        
+        Returns:
+            Sovereignty status dict
+        """
+        return self.sovereignty.get_sovereignty_status()
+    
     def list_monitors(self) -> List[str]:
-        """Get list of available monitors
+        """Get list of available monitors.
         
         Returns:
             List of monitor names
@@ -146,7 +176,7 @@ class MonitorManager:
         ]
     
     def get_monitor(self, name: str) -> Optional[BaseMonitor]:
-        """Get specific monitor
+        """Get specific monitor.
         
         Args:
             name: Monitor name (gpu, cpu, ram)
@@ -156,16 +186,28 @@ class MonitorManager:
         """
         return self.monitors.get(name)
 
+
 if __name__ == "__main__":
     # Benchmark
     print("[TEST] MonitorManager Performance Benchmark")
     print("="*60)
     
-    manager = MonitorManager()
+    # Test 1: Default (auto-detect)
+    print("\n[TEST 1] AUTO-DETECT MODE")
+    manager = MonitorManager(prefer_native=False)
     
     print("\n[INFO] Available monitors:")
     for monitor_name in manager.list_monitors():
         print(f"  - {monitor_name}")
+    
+    # Show sovereignty status
+    status = manager.get_sovereignty_status()
+    print("\n[INFO] Sovereignty Status:")
+    print(f"  Level: {status['level']}")
+    print(f"  Score: {status['score']}/100")
+    print(f"  GPU: {status['gpu']}")
+    print(f"  CPU: {status['cpu']}")
+    print(f"  RAM: {status['ram']}")
     
     # Warmup
     print("\n[INFO] Warmup (10 iterations)...")
@@ -187,7 +229,7 @@ if __name__ == "__main__":
     print(f"\n[RESULT] {iterations} iterations in {elapsed:.3f}s")
     print(f"[RESULT] Average: {avg_time:.2f}ms per call")
     print(f"[RESULT] Target: <10ms")
-    print(f"[RESULT] Status: {'PASS \u2705' if avg_time < 10 else 'FAIL \u274c'}")
+    print(f"[RESULT] Status: {'PASS ✅' if avg_time < 10 else 'FAIL ❌'}")
     
     # Performance stats from manager
     stats = manager.get_performance_stats()
@@ -201,5 +243,28 @@ if __name__ == "__main__":
     data = manager.get_all_data()
     for monitor_name, monitor_data in data.items():
         print(f"\n  {monitor_name.upper()}:")
-        for k, v in monitor_data.items():
+        for k, v in list(monitor_data.items())[:5]:  # First 5 keys
             print(f"    {k}: {v}")
+    
+    # Test 2: Native mode (max sovereignty)
+    print("\n" + "="*60)
+    print("\n[TEST 2] NATIVE MODE (MAX SOVEREIGNTY)")
+    manager_native = MonitorManager(prefer_native=True)
+    
+    status_native = manager_native.get_sovereignty_status()
+    print("\n[INFO] Sovereignty Status:")
+    print(f"  Level: {status_native['level']}")
+    print(f"  Score: {status_native['score']}/100")
+    print(f"  GPU: {status_native['gpu']}")
+    print(f"  CPU: {status_native['cpu']}")
+    print(f"  RAM: {status_native['ram']}")
+    
+    # Test data retrieval
+    print("\n[INFO] Testing native monitors...")
+    data_native = manager_native.get_all_data()
+    print(f"  CPU Load: {data_native['cpu']['load']:.1f}%")
+    print(f"  RAM Used: {data_native['ram']['used']:.2f} GB")
+    
+    print("\n" + "="*60)
+    print("✅ MonitorManager with Sovereignty works!")
+    print("="*60)
