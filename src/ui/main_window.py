@@ -1,6 +1,6 @@
 """Main window with full localization and modern UI
 
-Version: 0.3.5
+Version: 0.3.5a
 """
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -147,7 +147,7 @@ class MetricCard(QFrame):
 class PartMartMainWindow(QMainWindow):
     """Main application window with full localization
     
-    Version: 0.3.5
+    Version: 0.3.5a
     """
 
     def __init__(self):
@@ -195,7 +195,7 @@ class PartMartMainWindow(QMainWindow):
         self._create_menu_bar()
         
         # Log startup
-        self.logger.log_startup("0.3.5")
+        self.logger.log_startup("0.3.5a")
         
         # Auto-update timer
         update_interval = self.config.get_update_interval()
@@ -211,7 +211,7 @@ class PartMartMainWindow(QMainWindow):
             self.game_timer.start(3000)  # Check every 3 seconds
 
     def _setup_ui(self):
-        self.setWindowTitle(t('window_title', version='0.3.5'))
+        self.setWindowTitle(t('window_title', version='0.3.5a'))
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 700)
         
@@ -311,7 +311,7 @@ class PartMartMainWindow(QMainWindow):
         layout.setContentsMargins(32, 16, 32, 16)
         
         # Logo
-        logo = QLabel("🐉 PartMart Boost v0.3.5")
+        logo = QLabel("🐉 PartMart Boost v0.3.5a")
         logo.setStyleSheet("""
             font-size: 28px;
             font-weight: 700;
@@ -427,7 +427,6 @@ class PartMartMainWindow(QMainWindow):
         self.boost_btn = QPushButton()
         self.boost_btn.setFixedHeight(60)
         self.boost_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Removed transform property that causes CSS error
         self.boost_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -823,7 +822,7 @@ class PartMartMainWindow(QMainWindow):
 
     def _refresh_ui_texts(self):
         """Refresh all UI texts with new language"""
-        self.setWindowTitle(t('window_title', version='0.3.5'))
+        self.setWindowTitle(t('window_title', version='0.3.5a'))
         self._update_nav_texts()
         
         # Update cards
@@ -862,7 +861,7 @@ class PartMartMainWindow(QMainWindow):
         QMessageBox.about(
             self,
             t('about'),
-            t('about_text', version='0.3.5')
+            t('about_text', version='0.3.5a')
         )
 
     def closeEvent(self, event):
