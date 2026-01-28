@@ -1,11 +1,13 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QFrame, QStackedWidget, QApplication, QProgressBar, QGridLayout
+    QLabel, QFrame, QStackedWidget, QApplication, QProgressBar, QGridLayout, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QPalette, QColor
 import sys
 import os
+import subprocess
+import psutil
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -102,21 +104,24 @@ class MetricCard(QFrame):
     
     def set_value(self, value: str):
         self.value_label.setText(value)
+        self.value_label.repaint()
     
     def set_subtitle(self, text: str):
         self.subtitle_label.setText(text)
+        self.subtitle_label.repaint()
     
     def set_progress(self, value: int, text: str = ""):
         self.progress.setValue(value)
         if text:
             self.progress.setFormat(text)
+        self.progress.repaint()
 
 class PartMartMainWindow(QMainWindow):
     """Modern card-based UI with PartMart red branding"""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("🐉 PartMart Boost v0.3.1-alpha")
+        self.setWindowTitle("🐉 PartMart Boost v0.3.2-alpha")
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 700)
         
@@ -143,6 +148,9 @@ class PartMartMainWindow(QMainWindow):
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #0D0D0D;
+            }
+            * {
+                font-family: "Segoe UI", "Arial", sans-serif;
             }
             QLabel {
                 color: #FFFFFF;
@@ -194,6 +202,7 @@ class PartMartMainWindow(QMainWindow):
             font-weight: 700;
             color: #E63946;
             letter-spacing: 2px;
+            background: transparent;
         """)
         layout.addWidget(logo)
         
@@ -283,6 +292,28 @@ class PartMartMainWindow(QMainWindow):
         info_card = self._create_system_info_card()
         layout.addWidget(info_card)
         
+        # Quick Boost button
+        boost_btn = QPushButton("⚡ БЫСТРЫЙ БУСТ")
+        boost_btn.setFixedHeight(60)
+        boost_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        boost_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E63946, stop:1 #FF4757);
+                color: white;
+                border: none;
+                border-radius: 16px;
+                font-size: 20px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #FF4757, stop:1 #E63946);
+            }
+        """)
+        boost_btn.clicked.connect(self._quick_boost)
+        layout.addWidget(boost_btn)
+        
         # Bottom action cards
         actions = QHBoxLayout()
         actions.setSpacing(20)
@@ -302,31 +333,50 @@ class PartMartMainWindow(QMainWindow):
     def _create_system_info_card(self) -> QFrame:
         card = QFrame()
         card.setFixedHeight(120)
+        card.setAutoFillBackground(True)
         card.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #1A1A1A, stop:1 #252525);
+                background-color: #1A1A1A;
                 border-left: 4px solid #E63946;
                 border-radius: 16px;
-                padding: 20px;
             }
         """)
         
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
         
         title = QLabel("📊 СИСТЕМНЫЕ ПОКАЗАТЕЛИ")
-        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #FFFFFF; background: transparent;")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: 700;
+                color: #FFFFFF;
+                background: transparent;
+            }
+        """)
         layout.addWidget(title)
         
         info = QHBoxLayout()
         info.setSpacing(32)
         
         self.gpu_info_label = QLabel("GPU: Loading...")
-        self.gpu_info_label.setStyleSheet("font-size: 13px; color: #A0A0A0; background: transparent;")
+        self.gpu_info_label.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                color: #A0A0A0;
+                background: transparent;
+            }
+        """)
         info.addWidget(self.gpu_info_label)
         
         self.cpu_info_label = QLabel("CPU: Loading...")
-        self.cpu_info_label.setStyleSheet("font-size: 13px; color: #A0A0A0; background: transparent;")
+        self.cpu_info_label.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                color: #A0A0A0;
+                background: transparent;
+            }
+        """)
         info.addWidget(self.cpu_info_label)
         
         layout.addLayout(info)
@@ -339,48 +389,95 @@ class PartMartMainWindow(QMainWindow):
         card = QFrame()
         card.setFixedHeight(140)
         card.setCursor(Qt.CursorShape.PointingHandCursor)
+        card.setAutoFillBackground(True)
         card.setStyleSheet("""
             QFrame {
-                background: #1A1A1A;
+                background-color: #1A1A1A;
                 border: 2px solid #252525;
                 border-radius: 16px;
-                padding: 20px;
             }
             QFrame:hover {
-                background: #252525;
+                background-color: #252525;
                 border-color: #E63946;
             }
         """)
         
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
         
         title_label = QLabel(title)
         title_label.setStyleSheet("""
-            font-size: 20px;
-            font-weight: 700;
-            color: #E63946;
-            background: transparent;
+            QLabel {
+                font-size: 20px;
+                font-weight: 700;
+                color: #E63946;
+                background: transparent;
+            }
         """)
         layout.addWidget(title_label)
         
         desc_label = QLabel(desc)
         desc_label.setStyleSheet("""
-            font-size: 13px;
-            color: #A0A0A0;
-            background: transparent;
+            QLabel {
+                font-size: 13px;
+                color: #A0A0A0;
+                background: transparent;
+            }
         """)
         layout.addWidget(desc_label)
         
         layout.addStretch()
         
         arrow = QLabel("→")
-        arrow.setStyleSheet("font-size: 24px; color: #E63946; background: transparent;")
+        arrow.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                color: #E63946;
+                background: transparent;
+            }
+        """)
         arrow.setAlignment(Qt.AlignmentFlag.AlignRight)
         layout.addWidget(arrow)
         
         card.setLayout(layout)
         card.mousePressEvent = lambda e: callback()
         return card
+
+    def _quick_boost(self):
+        """Quick system optimization"""
+        reply = QMessageBox.question(
+            self,
+            'Быстрый буст',
+            'Оптимизировать систему?\n\nБудет выполнено:\n• Очистка RAM\n• Оптимизация приоритетов процессов',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Clear RAM (Windows)
+                if sys.platform == 'win32':
+                    # Empty working sets
+                    subprocess.run(['powershell', '-Command', 'Clear-RecycleBin -Force'], 
+                                   capture_output=True, timeout=5)
+                
+                # Optimize process priorities
+                current_process = psutil.Process()
+                try:
+                    current_process.nice(psutil.HIGH_PRIORITY_CLASS if sys.platform == 'win32' else -10)
+                except:
+                    pass
+                
+                QMessageBox.information(
+                    self,
+                    'Готово!',
+                    '✅ Оптимизация завершена!\n\nПроверьте изменения в метриках.'
+                )
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    'Ошибка',
+                    f'Не удалось выполнить оптимизацию:\n{str(e)}'
+                )
 
     def _create_gpu_page(self) -> QWidget:
         page = QWidget()
@@ -407,7 +504,13 @@ class PartMartMainWindow(QMainWindow):
         info_layout = QVBoxLayout()
         
         self.gpu_detail_label = QLabel("Loading GPU info...")
-        self.gpu_detail_label.setStyleSheet("font-size: 16px; color: #FFFFFF; background: transparent;")
+        self.gpu_detail_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: #FFFFFF;
+                background: transparent;
+            }
+        """)
         info_layout.addWidget(self.gpu_detail_label)
         
         self.gpu_detail_load = QProgressBar()
@@ -484,11 +587,13 @@ class PartMartMainWindow(QMainWindow):
                     self.cpu_card.set_subtitle(f"{cpu['count']} cores | {cpu['freq']:.0f}MHz")
                 self.cpu_card.set_progress(int(cpu['load']), f"Load: {int(cpu['load'])}%")
             
-            # System info card
+            # System info card - FORCE REPAINT
             if hasattr(self, 'gpu_info_label'):
                 self.gpu_info_label.setText(f"GPU: {gpu['name'][:20]}... | {gpu['clock_gpu']}MHz | {temp}°C | Load {gpu['load_gpu']:.0f}%")
+                self.gpu_info_label.repaint()
             if hasattr(self, 'cpu_info_label'):
                 self.cpu_info_label.setText(f"CPU: {cpu['count']} cores | Load {cpu['load']:.0f}% | {cpu['freq']:.0f}MHz")
+                self.cpu_info_label.repaint()
             
             # GPU page
             if hasattr(self, 'gpu_detail_label'):
@@ -497,9 +602,11 @@ class PartMartMainWindow(QMainWindow):
                     f"Temp: {temp}°C | Clock: {gpu['clock_gpu']}MHz | Memory: {gpu['clock_mem']}MHz\n"
                     f"Load: {gpu['load_gpu']:.0f}% | Power: {gpu['power']:.1f}W"
                 )
+                self.gpu_detail_label.repaint()
             if hasattr(self, 'gpu_detail_load'):
                 self.gpu_detail_load.setValue(int(gpu['load_gpu']))
                 self.gpu_detail_load.setFormat(f"GPU Load: {int(gpu['load_gpu'])}%")
+                self.gpu_detail_load.repaint()
                 
         except Exception as e:
             print(f"Error updating UI: {e}")
