@@ -1,0 +1,64 @@
+# SECURITY: Pinned versions to prevent supply chain attacks
+# Generated: 2026-01-28
+# Python: 3.14.x compatible
+#
+# To update:
+#   pip install pip-tools
+#   pip-compile requirements.txt --output-file requirements-lock.txt
+#
+# To verify integrity:
+#   pip install pip-audit
+#   pip-audit -r requirements-lock.txt
+
+# Core dependencies (PINNED VERSIONS)
+
+# GPU monitoring
+nvidia-ml-py==12.560.30
+
+# System monitoring
+psutil==7.0.1
+
+# UI framework
+PyQt6==6.8.0
+PyQt6-Qt6==6.8.0
+PyQt6-sip==13.9.1
+
+# Windows Management (Windows only)
+wmi==1.5.1; sys_platform == 'win32'
+pywin32==308; sys_platform == 'win32'
+
+# ML dependencies (optional)
+scikit-learn==1.6.0
+numpy==2.2.1
+joblib==1.4.2
+scipy==1.15.1
+threadpoolctl==3.5.0
+
+# Utilities
+requests==2.32.3
+certifi==2024.12.14
+charset-normalizer==3.4.0
+idna==3.10
+urllib3==2.3.0
+
+# Testing & QA (dev dependencies)
+pytest==8.3.4
+pytest-cov==6.0.0
+pylint==3.3.3
+black==24.10.0
+
+# Build & Distribution
+PyInstaller==6.15.0
+wheel==0.45.1
+
+# Security audit tools
+safety==3.2.11
+bandit==1.8.0
+pip-audit==2.7.3
+
+# VERIFICATION HASHES (optional - for pip install --require-hashes)
+# To generate:
+#   pip hash nvidia-ml-py==12.560.30
+#
+# nvidia-ml-py==12.560.30 \
+#     --hash=sha256:...
