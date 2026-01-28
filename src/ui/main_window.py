@@ -12,15 +12,15 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 import sys
+import os
 
-# Correcting relative imports for the package structure
-try:
-    from .ai_widget import PartMartAIWidget
-    from ..ai_optimizer import PartMartAIOptimizer
-except ImportError:
-    # Fallback for direct execution
-    from ai_widget import PartMartAIWidget
-    from ai_optimizer import PartMartAIOptimizer
+# Add src directory to path for imports
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Absolute imports from src package
+from ui.ai_widget import PartMartAIWidget
+from ai_optimizer import PartMartAIOptimizer
 
 class PartMartMainWindow(QMainWindow):
     """Steam-like main window for PartMart Boost"""
@@ -41,7 +41,8 @@ class PartMartMainWindow(QMainWindow):
     def _load_theme(self) -> None:
         """Load QSS theme"""
         try:
-            with open("src/ui/theme.qss", "r", encoding="utf-8") as f:
+            theme_path = os.path.join(os.path.dirname(__file__), "theme.qss")
+            with open(theme_path, "r", encoding="utf-8") as f:
                 self.setStyleSheet(f.read())
         except FileNotFoundError:
             # Fallback: basic background
