@@ -1,6 +1,7 @@
 """Games Widget - Game profiles management UI
 
-Version: 0.3.5b
+Version: 0.3.5b_hotfix
+Fixed: Removed broken AddGameDialog import, uses parent wizard
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -8,7 +9,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
-from ui.add_game_dialog import AddGameDialog
 
 
 class GameCard(QFrame):
@@ -117,7 +117,11 @@ class GameCard(QFrame):
 
 
 class GamesWidget(QWidget):
-    """Games management widget"""
+    """Games management widget
+    
+    Version: 0.3.5b_hotfix
+    Fixed: Uses parent window's wizard instead of broken import
+    """
     
     def __init__(self, profile_manager, game_detector, parent=None):
         super().__init__(parent)
@@ -130,7 +134,7 @@ class GamesWidget(QWidget):
         # Update timer
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._update_games)
-        self.update_timer.start(1000)  # Update every second
+        self.update_timer.start(1000)
     
     def _setup_ui(self):
         layout = QVBoxLayout()
@@ -152,28 +156,7 @@ class GamesWidget(QWidget):
         
         header.addStretch()
         
-        # Add game button
-        add_btn = QPushButton("➕ Добавить игру")
-        add_btn.setFixedHeight(40)
-        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #E63946, stop:1 #FF4757);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                padding: 0 20px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #FF4757, stop:1 #E63946);
-            }
-        """)
-        add_btn.clicked.connect(self._add_game)
-        header.addWidget(add_btn)
+        # NOTE: Add game button is added by main_window.py via _add_game_wizard_button
         
         # Reload button
         reload_btn = QPushButton("🔄 Обновить")
@@ -193,7 +176,7 @@ class GamesWidget(QWidget):
                 background: #777777;
             }
         """)
-        reload_btn.clicked.connect(self._reload_profiles)
+        reload_btn.clicked.connect(self.reload_profiles)
         header.addWidget(reload_btn)
         
         layout.addLayout(header)
@@ -236,9 +219,9 @@ class GamesWidget(QWidget):
         
         help_text = QLabel(
             "1️⃣ Нажмите '➕ Добавить игру'\n"
-            "2️⃣ Введите название и имя .exe файла\n"
-            "3️⃣ Нажмите '✅ Добавить'\n"
-            "4️⃣ Перезапустите PartMart Boost"
+            "2️⃣ Запустите игру → Task Manager → Details\n"
+            "3️⃣ Скопируйте имя .exe файла\n"
+            "4️⃣ Введите данные и нажмите '✅ Сохранить'"
         )
         help_text.setStyleSheet("""
             QLabel {
@@ -267,6 +250,18 @@ class GamesWidget(QWidget):
         self.cards_layout.setSpacing(12)
         
         # Add cards for each profile
+        self._create_game_cards()
+        
+        self.cards_layout.addStretch()
+        container.setLayout(self.cards_layout)
+        scroll.setWidget(container)
+        
+        layout.addWidget(scroll, 1)
+        
+        self.setLayout(layout)
+    
+    def _create_game_cards(self):
+        """Create game cards from profiles"""
         for profile in self.profile_manager.get_all_profiles():
             card = GameCard(profile.game_name)
             self.game_cards[profile.game_name] = card
@@ -287,101 +282,45 @@ class GamesWidget(QWidget):
                 }
             """)
             self.cards_layout.addWidget(empty_label)
-        
-        self.cards_layout.addStretch()
-        container.setLayout(self.cards_layout)
-        scroll.setWidget(container)
-        
-        layout.addWidget(scroll, 1)
-        
-        self.setLayout(layout)
-    
-    def _add_game(self):
-        """Show add game dialog"""
-        dialog = AddGameDialog(self)
-        if dialog.exec():
-            # Show success and reload
-            QMessageBox.information(
-                self,
-                "Успех!",
-                "✅ Игра добавлена!\n\n"
-                "🔄 Нажмите 'Обновить' чтобы увидеть её в списке.\n"
-                "Либо перезапустите PartMart Boost."
-            )
     
     def _update_games(self):
         """Update running games status"""
-        running_games = {game.profile.game_name for game in self.game_detector.get_detected_games()}
-        
-        for game_name, card in self.game_cards.items():
-            card.set_running(game_name in running_games)
+        try:
+            running_games = {game.profile.game_name for game in self.game_detector.get_detected_games()}
+            
+            for game_name, card in self.game_cards.items():
+                card.set_running(game_name in running_games)
+        except Exception as e:
+            print(f"[ERROR] Failed to update games: {e}")
     
-    def _reload_profiles(self):
-        """Reload profiles from disk"""
-        self.profile_manager.reload()
+    def reload_profiles(self):
+        """Reload profiles from disk
         
-        # Clear existing cards
-        while self.cards_layout.count():
-            item = self.cards_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        # Recreate cards
-        self.game_cards.clear()
-        for profile in self.profile_manager.get_all_profiles():
-            card = GameCard(profile.game_name)
-            self.game_cards[profile.game_name] = card
-            self.cards_layout.addWidget(card)
-        
-        if not self.game_cards:
-            empty_label = QLabel(
-                "📁 Нет загруженных профилей\n\n"
-                "Нажмите '➕ Добавить игру' чтобы начать!"
+        Fixed: Properly named method (was _reload_profiles)
+        """
+        try:
+            # Reload manager
+            self.profile_manager.reload()
+            
+            # Clear existing cards
+            while self.cards_layout.count():
+                item = self.cards_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            
+            # Recreate cards
+            self.game_cards.clear()
+            self._create_game_cards()
+            
+            # Update info
+            profiles_count = len(self.profile_manager.get_all_profiles())
+            self.info_label.setText(f"📊 Загружено профилей: {profiles_count}")
+            
+            QMessageBox.information(
+                self,
+                "✅ Успех!",
+                f"Профили обновлены!\n\n"
+                f"Загружено: {profiles_count}"
             )
-            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty_label.setStyleSheet("""
-                QLabel {
-                    font-size: 16px;
-                    color: #666666;
-                    padding: 60px;
-                }
-            """)
-            self.cards_layout.addWidget(empty_label)
-        
-        self.cards_layout.addStretch()
-        
-        # Update info
-        profiles_count = len(self.profile_manager.get_all_profiles())
-        self.info_label.setText(f"📊 Загружено профилей: {profiles_count}")
-        
-        QMessageBox.information(
-            self,
-            "Успех!",
-            f"✅ Профили обновлены!\n\n"
-            f"Загружено: {profiles_count}"
-        )
-
-
-if __name__ == "__main__":
-    from PyQt6.QtWidgets import QApplication
-    import sys
-    
-    app = QApplication(sys.argv)
-    
-    # Mock objects for testing
-    class MockProfileManager:
-        def get_all_profiles(self):
-            return []
-        def reload(self):
-            pass
-    
-    class MockGameDetector:
-        def get_detected_games(self):
-            return []
-    
-    widget = GamesWidget(MockProfileManager(), MockGameDetector())
-    widget.setStyleSheet("background: #0D0D0D;")
-    widget.resize(800, 600)
-    widget.show()
-    
-    sys.exit(app.exec())
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось обновить: {e}")

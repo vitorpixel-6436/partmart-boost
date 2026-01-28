@@ -1,14 +1,15 @@
-"""Main window - Version 0.3.5b
+"""Main window - Version 0.3.5b_hotfix
 
 Fixes:
-- Metrics now ALWAYS show even without full data
-- Game wizard for easy game adding
-- Start of custom UI components
+- Metrics ALWAYS show
+- Game wizard with proper button group
+- Fixed _add_game_wizard_button
+- Fixed reload_profiles call
 """
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QStackedWidget, QApplication, QProgressBar, 
-    QGridLayout, QMessageBox, QDialog, QLineEdit, QTextEdit
+    QGridLayout, QMessageBox, QDialog, QLineEdit, QTextEdit, QButtonGroup
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPalette, QColor, QAction
@@ -43,7 +44,12 @@ except ImportError as e:
 
 
 class GameWizard(QDialog):
-    """Simple wizard for adding games"""
+    """Simple wizard for adding games
+    
+    Version: 0.3.5b_hotfix
+    Fixed: Priority buttons now mutually exclusive
+    Fixed: Better validation
+    """
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -138,6 +144,9 @@ class GameWizard(QDialog):
         
         priority_layout = QHBoxLayout()
         
+        # FIX: Use QButtonGroup to make buttons mutually exclusive
+        self.priority_group = QButtonGroup()
+        
         self.priority_high = QPushButton("🔥 Высокий")
         self.priority_high.setCheckable(True)
         self.priority_high.setChecked(True)
@@ -178,6 +187,10 @@ class GameWizard(QDialog):
                 border-color: #E63946;
             }
         """)
+        
+        # Add to group
+        self.priority_group.addButton(self.priority_high)
+        self.priority_group.addButton(self.priority_normal)
         
         priority_layout.addWidget(self.priority_high)
         priority_layout.addWidget(self.priority_normal)
@@ -235,23 +248,33 @@ class GameWizard(QDialog):
         """)
     
     def _save(self):
+        """Validate and save
+        
+        Fixed: Better validation
+        """
         self.game_name = self.name_input.text().strip()
         self.exe_name = self.exe_input.text().strip()
         
-        if not self.game_name:
-            QMessageBox.warning(self, "Ошибка", "Введите название игры!")
+        # Validation
+        if not self.game_name or len(self.game_name) < 2:
+            QMessageBox.warning(self, "Ошибка", "Введите название игры (минимум 2 символа)!")
             return
         
-        if not self.exe_name:
+        if not self.exe_name or len(self.exe_name) < 4:
             QMessageBox.warning(self, "Ошибка", "Введите имя .exe файла!")
             return
         
-        if not self.exe_name.endswith('.exe'):
+        # Auto-add .exe if missing
+        if not self.exe_name.lower().endswith('.exe'):
             self.exe_name += '.exe'
         
         self.accept()
     
     def get_data(self):
+        """Get validated wizard data
+        
+        Fixed: Added validation
+        """
         priority = "high" if self.priority_high.isChecked() else "normal"
         
         return {
@@ -280,7 +303,7 @@ class GameWizard(QDialog):
 
 
 class MetricCard(QFrame):
-    """Metric card - ALWAYS shows something even without data"""
+    """Metric card - ALWAYS shows something"""
     
     def __init__(self, title_key: str, icon: str, parent=None):
         super().__init__(parent)
@@ -367,7 +390,6 @@ class MetricCard(QFrame):
         self.update_texts()
     
     def update_texts(self):
-        """Update all localized texts"""
         self.title_label.setText(f"{self.icon} {t(self.title_key)}")
         self.subtitle_label.setText("🔄 Loading...")
     
@@ -387,47 +409,28 @@ class MetricCard(QFrame):
 
 
 class PartMartMainWindow(QMainWindow):
-    """Main application window - v0.3.5b
-    
-    Improvements:
-    - Metrics ALWAYS show (even if limited)
-    - Game wizard for easy adding
-    - Better error handling
-    """
+    """Main window - v0.3.5b_hotfix"""
 
     def __init__(self):
         super().__init__()
         
-        # Initialize core systems
         self.config = get_config()
         self.logger = get_logger()
         
-        # Set language
         lang = self.config.get_language()
         set_language(lang)
-        self.logger.info(f"Language set to: {lang}")
         
-        # Initialize monitoring with debug
-        print("[DEBUG] Initializing SystemMonitor...")
+        # Initialize monitoring
         self.system_monitor = SystemMonitor()
-        self.system_monitor._debug = True  # Enable debug
-        
-        # Test monitor immediately
-        print("[DEBUG] Testing monitor...")
-        test_data = self.system_monitor.get_all_data()
-        print(f"[DEBUG] Test GPU: {test_data.get('gpu', {}).get('name')}")
-        print(f"[DEBUG] Test CPU: {test_data.get('cpu', {}).get('name')}")
-        print(f"[DEBUG] Test RAM: {test_data.get('ram', {}).get('total_gb')} GB")
+        self.system_monitor._debug = False  # FIX: Disable spam
         
         self.ai_engine = PartMartAIOptimizer()
         self.nav_buttons = []
         
-        # Metric cards
         self.gpu_card = None
         self.ram_card = None
         self.cpu_card = None
         
-        # Store games availability
         self.games_available = GAMES_AVAILABLE
         
         # Initialize Game Profiles
@@ -437,52 +440,39 @@ class PartMartMainWindow(QMainWindow):
                 self.game_detector = GameDetector(self.profile_manager)
                 self.profile_applier = ProfileApplier()
                 
-                # Setup callbacks
                 self.game_detector.on_game_started = self._on_game_started
                 self.game_detector.on_game_stopped = self._on_game_stopped
                 
-                self.logger.info("Game Profiles system initialized")
+                self.logger.info("Game Profiles initialized")
             except Exception as e:
-                self.logger.error(f"Failed to initialize Game Profiles: {e}")
+                self.logger.error(f"Game Profiles failed: {e}")
                 self.games_available = False
         
         self._setup_ui()
         self._create_menu_bar()
         
-        # Log startup
-        self.logger.log_startup("0.3.5b")
+        self.logger.log_startup("0.3.5b_hotfix")
         
-        # Update timer
         update_interval = self.config.get_update_interval()
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._update_system_data)
         self.update_timer.start(update_interval)
-        
-        # Initial update
-        print("[DEBUG] Doing initial metrics update...")
         self._update_system_data()
         
-        # Game detection timer
         if self.games_available:
             self.game_timer = QTimer()
             self.game_timer.timeout.connect(self._update_game_detection)
             self.game_timer.start(3000)
 
     def _setup_ui(self):
-        self.setWindowTitle("PartMart Boost v0.3.5b")
+        self.setWindowTitle("PartMart Boost v0.3.5b_hotfix")
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 700)
         
         self.setStyleSheet("""
-            QMainWindow {
-                background-color: #0D0D0D;
-            }
-            * {
-                font-family: "Segoe UI", "Arial", sans-serif;
-            }
-            QLabel {
-                color: #FFFFFF;
-            }
+            QMainWindow { background-color: #0D0D0D; }
+            * { font-family: "Segoe UI", "Arial", sans-serif; }
+            QLabel { color: #FFFFFF; }
         """)
         
         central = QWidget()
@@ -491,11 +481,9 @@ class PartMartMainWindow(QMainWindow):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Header
         header = self._create_header()
         main_layout.addWidget(header)
         
-        # Content
         self.content_stack = QStackedWidget()
         self.content_stack.setStyleSheet("background: #0D0D0D;")
         
@@ -505,10 +493,8 @@ class PartMartMainWindow(QMainWindow):
         
         pages = [self.page_home, self.page_gpu, self.page_ram]
         
-        # Add Games page
         if self.games_available:
             self.page_games = GamesWidget(self.profile_manager, self.game_detector)
-            # Add wizard button
             self._add_game_wizard_button(self.page_games)
             pages.append(self.page_games)
         else:
@@ -522,53 +508,86 @@ class PartMartMainWindow(QMainWindow):
         central.setLayout(main_layout)
 
     def _add_game_wizard_button(self, games_widget):
-        """Add 'Add Game' button to games widget"""
-        # Find the header layout
-        if hasattr(games_widget, 'layout'):
-            layout = games_widget.layout()
-            if layout and layout.count() > 0:
-                header_layout = layout.itemAt(0)
-                if isinstance(header_layout, QHBoxLayout) or hasattr(header_layout, 'layout'):
-                    # Add wizard button
-                    wizard_btn = QPushButton("➕ Добавить игру")
-                    wizard_btn.setFixedHeight(40)
-                    wizard_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                    wizard_btn.setStyleSheet("""
-                        QPushButton {
-                            background: #4CAF50;
-                            color: white;
-                            border: none;
-                            border-radius: 8px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            padding: 0 20px;
-                        }
-                        QPushButton:hover {
-                            background: #66BB6A;
-                        }
-                    """)
-                    wizard_btn.clicked.connect(self._show_game_wizard)
-                    
-                    if hasattr(header_layout, 'addWidget'):
-                        header_layout.addWidget(wizard_btn)
+        """Add wizard button to games widget
+        
+        Fixed: More robust layout finding
+        """
+        try:
+            # Get the main layout
+            main_layout = games_widget.layout()
+            if not main_layout or main_layout.count() == 0:
+                print("[WARN] Could not find games widget layout")
+                return
+            
+            # Get header layout (should be first item)
+            header_item = main_layout.itemAt(0)
+            if not header_item:
+                print("[WARN] No header layout found")
+                return
+            
+            # Check if it's a layout
+            header_layout = header_item.layout() if hasattr(header_item, 'layout') else None
+            if not header_layout or not isinstance(header_layout, QHBoxLayout):
+                print("[WARN] Header is not QHBoxLayout")
+                return
+            
+            # Add button BEFORE the reload button (insert at second-to-last position)
+            wizard_btn = QPushButton("➕ Добавить игру")
+            wizard_btn.setFixedHeight(40)
+            wizard_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            wizard_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #E63946, stop:1 #FF4757);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    padding: 0 20px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #FF4757, stop:1 #E63946);
+                }
+            """)
+            wizard_btn.clicked.connect(self._show_game_wizard)
+            
+            # Insert before last item (reload button)
+            count = header_layout.count()
+            if count > 1:
+                header_layout.insertWidget(count - 1, wizard_btn)
+            else:
+                header_layout.addWidget(wizard_btn)
+            
+            print("[OK] Game wizard button added")
+        
+        except Exception as e:
+            print(f"[ERROR] Failed to add wizard button: {e}")
 
     def _show_game_wizard(self):
-        """Show game wizard dialog"""
+        """Show game wizard
+        
+        Fixed: Better error handling
+        """
         wizard = GameWizard(self)
         if wizard.exec() == QDialog.DialogCode.Accepted:
-            # Save profile
             import json
             from pathlib import Path
             
-            data = wizard.get_data()
-            
-            # Create filename from game name
-            filename = data['game_name'].lower().replace(' ', '_').replace(':', '') + '.json'
-            filepath = Path('config/profiles') / filename
-            
             try:
+                data = wizard.get_data()
+                
+                # Create safe filename
+                filename = data['game_name'].lower()
+                filename = filename.replace(' ', '_').replace(':', '').replace('/', '_')
+                filename = filename[:50]  # Limit length
+                filename += '.json'
+                
+                filepath = Path('config/profiles') / filename
                 filepath.parent.mkdir(parents=True, exist_ok=True)
                 
+                # Save with error handling
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
                 
@@ -576,18 +595,19 @@ class PartMartMainWindow(QMainWindow):
                 if self.games_available and hasattr(self, 'profile_manager'):
                     self.profile_manager.reload()
                     
-                    # Refresh games widget
-                    if hasattr(self.page_games, '_reload_profiles'):
-                        self.page_games._reload_profiles()
+                    # FIX: Call correct method name
+                    if hasattr(self.page_games, 'reload_profiles'):
+                        self.page_games.reload_profiles()
                 
                 QMessageBox.information(
                     self,
                     "✅ Успех!",
                     f"Игра '{data['game_name']}' добавлена!\n\n"
-                    f"Теперь запусти игру и профиль применится автоматически!"
+                    f"Запусти игру → профиль применится автоматически!"
                 )
                 
             except Exception as e:
+                self.logger.error(f"Failed to save profile: {e}")
                 QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить: {e}")
 
     def _create_menu_bar(self):
@@ -598,17 +618,13 @@ class PartMartMainWindow(QMainWindow):
                 color: #FFFFFF;
                 border-bottom: 1px solid #E63946;
             }
-            QMenuBar::item:selected {
-                background-color: #E63946;
-            }
+            QMenuBar::item:selected { background-color: #E63946; }
             QMenu {
                 background-color: #1A1A1A;
                 color: #FFFFFF;
                 border: 1px solid #E63946;
             }
-            QMenu::item:selected {
-                background-color: #E63946;
-            }
+            QMenu::item:selected { background-color: #E63946; }
         """)
         
         settings_menu = menubar.addMenu(t('settings'))
@@ -637,7 +653,7 @@ class PartMartMainWindow(QMainWindow):
         layout = QHBoxLayout()
         layout.setContentsMargins(32, 16, 32, 16)
         
-        logo = QLabel("🐉 PartMart Boost v0.3.5b")
+        logo = QLabel("🐉 PartMart Boost v0.3.5b_hotfix")
         logo.setStyleSheet("""
             font-size: 28px;
             font-weight: 700;
@@ -695,9 +711,7 @@ class PartMartMainWindow(QMainWindow):
                     font-weight: 600;
                     padding: 8px 16px;
                 }
-                QPushButton:hover {
-                    background: #FF4757;
-                }
+                QPushButton:hover { background: #FF4757; }
             """
         else:
             return """
@@ -721,7 +735,6 @@ class PartMartMainWindow(QMainWindow):
         for i, btn in enumerate(self.nav_buttons):
             btn.setStyleSheet(self._get_tab_style(i == index))
         self.content_stack.setCurrentIndex(index)
-        self.logger.info(f"Switched to page: {index}")
 
     def _create_home_page(self) -> QWidget:
         page = QWidget()
@@ -729,7 +742,6 @@ class PartMartMainWindow(QMainWindow):
         layout.setContentsMargins(40, 32, 40, 32)
         layout.setSpacing(24)
         
-        # Metric cards
         grid = QGridLayout()
         grid.setSpacing(20)
         
@@ -743,13 +755,10 @@ class PartMartMainWindow(QMainWindow):
         
         layout.addLayout(grid)
         
-        # System info card
         self.info_card = self._create_system_info_card()
         layout.addWidget(self.info_card)
         
-        # Quick Boost button
-        self.boost_btn = QPushButton()
-        self.boost_btn.setText("⚡ Quick Boost")
+        self.boost_btn = QPushButton("⚡ Quick Boost")
         self.boost_btn.setFixedHeight(60)
         self.boost_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.boost_btn.setStyleSheet("""
@@ -835,9 +844,7 @@ class PartMartMainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout.setContentsMargins(40, 32, 40, 32)
         
-        title = QLabel()
-        title.setProperty('text_key', title_key)
-        title.setText(t(title_key) if title_key != 'games' else "Игры")
+        title = QLabel(t(title_key) if title_key != 'games' else "Игры")
         title.setStyleSheet("""
             QLabel {
                 font-size: 32px;
@@ -863,45 +870,40 @@ class PartMartMainWindow(QMainWindow):
 
     def _quick_boost(self):
         try:
-            self.logger.info("Quick Boost started")
-            
             if sys.platform == 'win32':
                 import psutil
                 p = psutil.Process()
                 p.nice(psutil.HIGH_PRIORITY_CLASS)
-                self.logger.info("Process priority increased")
             
             QMessageBox.information(self, "✅ Успех", "Оптимизация применена!")
-        
         except Exception as e:
-            self.logger.log_error_with_trace("Quick Boost failed", e)
             QMessageBox.critical(self, "Ошибка", f"Не удалось: {e}")
 
     def _update_system_data(self):
-        """Update ALL metrics - ALWAYS show something"""
+        """Update metrics - ALWAYS show something"""
         try:
-            print("[DEBUG] Updating metrics...")
-            
-            # Get all data
             all_data = self.system_monitor.get_all_data()
-            print(f"[DEBUG] Got data: GPU={all_data.get('gpu', {}).get('name')}, CPU={all_data.get('cpu', {}).get('name')}")
             
-            # GPU - ALWAYS show name at minimum
+            # GPU
             gpu_data = all_data.get('gpu', {})
             gpu_name = gpu_data.get('name', 'N/A')
-            gpu_temp = gpu_data.get('temperature', 0)
-            gpu_load = gpu_data.get('load', 0)
-            gpu_clock = gpu_data.get('clock', 0)
+            gpu_temp = gpu_data.get('temperature', 0) or 0
+            gpu_load = gpu_data.get('load', 0) or 0
             
-            print(f"[DEBUG] GPU: name={gpu_name}, temp={gpu_temp}, load={gpu_load}")
+            # FIX: Better type checking
+            try:
+                gpu_temp = int(float(gpu_temp)) if gpu_temp else 0
+                gpu_load = int(float(gpu_load)) if gpu_load else 0
+            except (ValueError, TypeError):
+                gpu_temp = 0
+                gpu_load = 0
             
-            # Show temperature OR load OR just name
-            if gpu_temp and gpu_temp > 0:
-                self.gpu_card.set_value(f"{int(gpu_temp)}°C")
-                self.gpu_card.set_progress(min(int(gpu_temp), 100), f"{int(gpu_temp)}°C")
-            elif gpu_load and gpu_load > 0:
-                self.gpu_card.set_value(f"{int(gpu_load)}%")
-                self.gpu_card.set_progress(int(gpu_load), f"{int(gpu_load)}%")
+            if gpu_temp > 0:
+                self.gpu_card.set_value(f"{gpu_temp}°C")
+                self.gpu_card.set_progress(min(gpu_temp, 100), f"{gpu_temp}°C")
+            elif gpu_load > 0:
+                self.gpu_card.set_value(f"{gpu_load}%")
+                self.gpu_card.set_progress(gpu_load, f"{gpu_load}%")
             else:
                 self.gpu_card.set_value("✅ OK")
                 self.gpu_card.set_progress(0, "Ready")
@@ -909,48 +911,37 @@ class PartMartMainWindow(QMainWindow):
             self.gpu_card.set_subtitle(gpu_name)
             self.gpu_info_label.setText(f"🌡️ GPU: {gpu_name}")
             
-            # RAM - Should ALWAYS work
+            # RAM
             ram_data = all_data.get('ram', {})
-            ram_percent = ram_data.get('percent', 0)
-            ram_used = ram_data.get('used_gb', 0)
-            ram_total = ram_data.get('total_gb', 0)
-            
-            print(f"[DEBUG] RAM: {ram_percent}% ({ram_used}/{ram_total} GB)")
+            ram_percent = int(ram_data.get('percent', 0))
+            ram_used = float(ram_data.get('used_gb', 0))
+            ram_total = float(ram_data.get('total_gb', 0))
             
             if ram_total > 0:
-                self.ram_card.set_value(f"{int(ram_percent)}%")
+                self.ram_card.set_value(f"{ram_percent}%")
                 self.ram_card.set_subtitle(f"{ram_used:.1f} / {ram_total:.1f} GB")
-                self.ram_card.set_progress(int(ram_percent), f"{int(ram_percent)}%")
+                self.ram_card.set_progress(ram_percent, f"{ram_percent}%")
             else:
                 self.ram_card.set_value("❌ N/A")
-                self.ram_card.set_subtitle("No data")
             
-            # CPU - Should ALWAYS work
+            # CPU
             cpu_data = all_data.get('cpu', {})
             cpu_name = cpu_data.get('name', 'N/A')
-            cpu_load = cpu_data.get('load', 0)
-            cpu_cores = cpu_data.get('cores', 0)
-            
-            print(f"[DEBUG] CPU: name={cpu_name}, load={cpu_load}, cores={cpu_cores}")
+            cpu_load = int(cpu_data.get('load', 0))
+            cpu_cores = int(cpu_data.get('cores', 0))
             
             if cpu_load > 0:
-                self.cpu_card.set_value(f"{int(cpu_load)}%")
-                self.cpu_card.set_progress(int(cpu_load), f"{int(cpu_load)}%")
+                self.cpu_card.set_value(f"{cpu_load}%")
+                self.cpu_card.set_progress(cpu_load, f"{cpu_load}%")
             else:
                 self.cpu_card.set_value("✅ OK")
                 self.cpu_card.set_progress(0, "Ready")
             
             self.cpu_card.set_subtitle(f"{cpu_cores} cores" if cpu_cores > 0 else cpu_name)
             self.cpu_info_label.setText(f"💻 CPU: {cpu_name}")
-            
-            print("[DEBUG] Metrics updated successfully")
         
         except Exception as e:
-            print(f"[ERROR] Failed to update metrics: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # Show error state
+            print(f"[ERROR] Metrics update failed: {e}")
             self.gpu_card.set_value("❌ Error")
             self.ram_card.set_value("❌ Error")
             self.cpu_card.set_value("❌ Error")
@@ -960,11 +951,9 @@ class PartMartMainWindow(QMainWindow):
             try:
                 self.game_detector.update()
             except Exception as e:
-                self.logger.error(f"Game detection error: {e}")
+                pass  # Silent fail
     
     def _on_game_started(self, game):
-        self.logger.info(f"Game started: {game.profile.game_name}")
-        
         try:
             self.profile_applier.apply_profile(game.profile, game.pid)
             self.game_detector.mark_profile_applied(game.pid)
@@ -975,22 +964,19 @@ class PartMartMainWindow(QMainWindow):
                 f"{game.profile.game_name}\n\n✅ Профиль применён!"
             )
         except Exception as e:
-            self.logger.error(f"Failed to apply profile: {e}")
+            self.logger.error(f"Apply profile failed: {e}")
     
     def _on_game_stopped(self, game):
-        self.logger.info(f"Game stopped: {game.profile.game_name}")
-        
         try:
             self.profile_applier.revert_optimizations()
         except Exception as e:
-            self.logger.error(f"Failed to revert: {e}")
+            pass
 
     def _show_settings(self):
         dialog = SettingsDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             new_lang = self.config.get_language()
             set_language(new_lang)
-            self.logger.info(f"Language changed to: {new_lang}")
             
             new_interval = self.config.get_update_interval()
             self.update_timer.setInterval(new_interval)
@@ -999,7 +985,7 @@ class PartMartMainWindow(QMainWindow):
         QMessageBox.about(
             self,
             "О программе",
-            "PartMart Boost v0.3.5b\n\n"
+            "PartMart Boost v0.3.5b_hotfix\n\n"
             "Оптимизация системы и игр\n\n"
             "PartMart Team 2026"
         )

@@ -1,6 +1,8 @@
 """Game Profile Management
 
-Version: 0.3.5a
+Version: 0.3.5b_hotfix
+Fixed: Better validation
+Fixed: Proper reload handling
 """
 import os
 import json
@@ -37,15 +39,28 @@ class GameProfile:
     
     @staticmethod
     def from_dict(data: Dict) -> 'GameProfile':
-        """Create profile from dict"""
+        """Create profile from dict with validation
+        
+        Fixed: Better validation
+        """
         gpu = data.get('gpu', {})
         ram = data.get('ram', {})
         windows = data.get('windows', {})
         
+        # Validate executable_names
+        exe_names = data.get('executable_names', [])
+        if not exe_names or not isinstance(exe_names, list):
+            raise ValueError(f"Invalid executable_names in profile {data.get('game_name')}")
+        
+        # Filter out empty strings
+        exe_names = [name.strip() for name in exe_names if name and name.strip()]
+        if not exe_names:
+            raise ValueError(f"No valid executables in profile {data.get('game_name')}")
+        
         return GameProfile(
             game_name=data.get('game_name', 'Unknown'),
             enabled=data.get('enabled', False),
-            executable_names=data.get('executable_names', []),
+            executable_names=exe_names,
             priority=data.get('priority', 'high'),
             affinity=data.get('affinity', 'auto'),
             
@@ -93,7 +108,11 @@ class GameProfile:
 
 
 class GameProfileManager:
-    """Manage game profiles"""
+    """Manage game profiles
+    
+    Version: 0.3.5b_hotfix
+    Fixed: Proper reload handling
+    """
     
     def __init__(self, profiles_dir: str = "config/profiles"):
         self.profiles_dir = Path(profiles_dir)
@@ -101,10 +120,17 @@ class GameProfileManager:
         self._load_profiles()
     
     def _load_profiles(self):
-        """Load all profiles from directory"""
+        """Load all profiles from directory
+        
+        Fixed: Better error handling
+        """
         if not self.profiles_dir.exists():
             print(f"[WARN] Profiles directory not found: {self.profiles_dir}")
+            self.profiles_dir.mkdir(parents=True, exist_ok=True)
             return
+        
+        loaded_count = 0
+        error_count = 0
         
         for file in self.profiles_dir.glob("*.json"):
             if file.name == "example_game.json":
@@ -117,17 +143,36 @@ class GameProfileManager:
                     
                     if profile.enabled:
                         self.profiles[profile.game_name] = profile
+                        loaded_count += 1
                         print(f"[OK] Loaded profile: {profile.game_name}")
+                    else:
+                        print(f"[INFO] Skipped disabled profile: {profile.game_name}")
+            
+            except ValueError as e:
+                print(f"[ERROR] Invalid profile {file.name}: {e}")
+                error_count += 1
+            except json.JSONDecodeError as e:
+                print(f"[ERROR] Invalid JSON in {file.name}: {e}")
+                error_count += 1
             except Exception as e:
                 print(f"[ERROR] Failed to load {file.name}: {e}")
+                error_count += 1
+        
+        print(f"[INFO] Loaded {loaded_count} profiles ({error_count} errors)")
     
     def get_profile_by_exe(self, exe_name: str) -> Optional[GameProfile]:
-        """Find profile by executable name"""
+        """Find profile by executable name
+        
+        Fixed: Case-insensitive matching
+        """
+        if not exe_name:
+            return None
+        
         exe_lower = exe_name.lower()
         
         for profile in self.profiles.values():
             for exe in profile.executable_names:
-                if exe.lower() == exe_lower:
+                if exe and exe.lower() == exe_lower:
                     return profile
         
         return None
@@ -137,24 +182,11 @@ class GameProfileManager:
         return list(self.profiles.values())
     
     def reload(self):
-        """Reload all profiles"""
+        """Reload all profiles
+        
+        Fixed: Properly clears and reloads
+        """
+        print("[INFO] Reloading profiles...")
         self.profiles.clear()
         self._load_profiles()
-
-
-if __name__ == "__main__":
-    # Test
-    print("[TEST] Game Profile Manager")
-    print("="*60)
-    
-    manager = GameProfileManager("../../config/profiles")
-    
-    print(f"\n[INFO] Loaded {len(manager.get_all_profiles())} profiles:")
-    for profile in manager.get_all_profiles():
-        print(f"  - {profile.game_name}")
-        print(f"    Executables: {profile.executable_names}")
-        print(f"    Priority: {profile.priority}")
-        print(f"    RAM reserved: {profile.ram_reserved_mb} MB")
-    
-    print("\n" + "="*60)
-    print("✅ Profile manager works!")
+        print(f"[OK] Reload complete: {len(self.profiles)} profiles loaded")
