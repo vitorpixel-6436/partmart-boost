@@ -1,6 +1,6 @@
-# 🐉 PartMart Boost v0.2-alpha
+# 🐉 PartMart Boost v0.3-alpha
 
-**Игровой оптимизатор ПК с РЕАЛЬНЫМ мониторингом системы**
+**Игровой оптимизатор ПК с РЕАЛЬНЫМ мониторингом и автоматическими профилями для игр**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
@@ -9,29 +9,39 @@
 
 ---
 
-## 🆕 Что нового в v0.2-alpha (28 января 2026)
+## 🆕 Что нового в v0.3-alpha (28 января 2026)
 
-### ✅ РЕАЛЬНЫЙ мониторинг системы
+### ✅ 🎮 GAME PROFILES (НОВИНКА!)
+- **Автоматическое обнаружение игр**: детектирует запуск 8+ популярных игр (GTA 5, Cyberpunk, CS2, Tarkov, Minecraft, Valorant, League, RDR2)
+- **Авто-оптимизация**: применяет профиль автоматически при запуске игры
+- **Умные настройки**: индивидуальные GPU/RAM настройки для каждой игры
+- **RAM Cleanup**: очистка памяти перед запуском игры (EmptyWorkingSet)
+- **Process Priority**: повышение приоритета игрового процесса (high/realtime)
+- **Power Plans**: автоматическое переключение на High Performance
+
+### Пример работы:
+```
+🎮 [AUTO-OPTIMIZE] Grand Theft Auto V started!
+⚙️ Applying optimizations:
+   🧹 RAM Freed: 847 MB
+   ✅ Process Priority: HIGH
+   📡 GPU Core: +100 MHz
+   📡 GPU Memory: +400 MHz
+   🔋 Power Plan: HIGH_PERFORMANCE
+✅ Profile applied successfully!
+```
+
+### ✅ Улучшенный мониторинг
 - **GPU**: температура (core + hotspot), частоты, загрузка, питание через `pynvml`
 - **CPU**: загрузка, температура, частота через `psutil`
 - **RAM**: использование, скорость, автоопределение XMP статуса через WMI
 - **Автообновление**: данные обновляются каждые 2 секунды
 
-### ✅ Улучшенный UI
-- Дизайн в стиле Steam Big Picture
-- Sidebar 280px с голубыми акцентами (#66c0f4)
-- Прогресс-бары для GPU/RAM загрузки
-- Плавные градиенты и улучшенная типографика
-
-### ✅ Упрощенная установка
-- **`launch.bat`** — запуск в 1 клик (автоустановка зависимостей)
-- Больше не нужно вручную устанавливать pip/requirements
-
 ### ⚠️ Что еще в разработке
-- GPU Optimizer (undervolt, OC) — Coming Soon
-- RAM XMP Enable — Coming Soon
-- FrameGen (FSR 3, DLSS 3) — Coming Soon
-- Game Profiles — Coming Soon
+- ✅ ~~Game Profiles~~ — **ГОТОВО!** ✅
+- ⏳ GPU Optimizer (undervolt, OC) — частично реализовано (нужен MSI Afterburner)
+- ⏳ RAM XMP Enable — Coming Soon
+- ⏳ FrameGen (FSR 3, DLSS 3) — Coming Soon
 
 ---
 
@@ -50,20 +60,17 @@ launch.bat
 
 **Готово!** Приложение автоматически установит все зависимости и запустится.
 
-### Способ 2: Ручная установка
+### Способ 2: Тестирование Game Profiles
 
 ```bash
-# 1. Установить Python 3.11+ с https://python.org
+# Запустить автоматическую оптимизацию игр
+python src/profiles/game_detector.py
 
-# 2. Скачать проект
-git clone https://github.com/vitorpixel-6436/partmart-boost.git
-cd partmart-boost
+# Посмотреть все доступные профили
+python src/profiles/game_profiles.py
 
-# 3. Установить зависимости
-pip install -r requirements.txt
-
-# 4. Запустить
-python src/main.py
+# Тест системы оптимизации
+python src/profiles/optimization_applier.py
 ```
 
 ### Требования:
@@ -71,6 +78,7 @@ python src/main.py
 - **ОС**: Windows 10 (build 19043+) или Windows 11
 - **RAM**: 2GB+
 - **GPU**: NVIDIA (рекомендуется), AMD, Intel Arc
+- **MSI Afterburner** (опционально): для GPU overclocking
 
 ---
 
@@ -78,19 +86,33 @@ python src/main.py
 
 **PartMart Boost** — desktop приложение для покупателей ПК от [PartMart](https://avito.ru/user/partmart) (Samara). 
 
-### Текущие возможности (v0.2-alpha):
+### Текущие возможности (v0.3-alpha):
 - ✅ Реальное отображение температур GPU/CPU
 - ✅ Мониторинг загрузки GPU и RAM в реальном времени
 - ✅ Автоопределение XMP статуса памяти
+- ✅ **Автоматические игровые профили (8 игр)**
+- ✅ **RAM cleanup перед запуском игр**
+- ✅ **Автоматическое управление приоритетом процессов**
+- ✅ **Переключение Power Plans**
 - ✅ Steam-inspired интерфейс
 - ✅ Автообновление данных каждые 2 секунды
 
+### Поддерживаемые игры:
+1. **GTA 5** (Grand Theft Auto V)
+2. **Cyberpunk 2077**
+3. **Counter-Strike 2** (CS2)
+4. **Escape from Tarkov**
+5. **Minecraft** (Java Edition)
+6. **Valorant**
+7. **League of Legends**
+8. **Red Dead Redemption 2** (RDR2)
+
 ### Планируется (v0.5-beta):
-- ⏳ GPU Optimizer (undervolt, memory OC)
+- ⏳ GPU Optimizer (полная интеграция с MSI Afterburner)
 - ⏳ RAM XMP Enable
-- ⏳ Quick Boost (1-click оптимизация)
+- ⏳ Интеграция профилей в основной UI
 - ⏳ FrameGen (FSR 3, DLSS 3)
-- ⏳ Game Profiles
+- ⏳ Пользовательские профили
 - ⏳ RTSS Overlay
 
 ---
@@ -100,7 +122,7 @@ python src/main.py
 ### Главная страница
 ```
 ┌─────────────────────────────────────────────────────┐
-│ 🐉 PartMart Boost v0.2                               │
+│ 🐉 PartMart Boost v0.3                               │
 ├─────────────────────────────────────────────────────┤
 │                                                     │
 │  🚀 БЫСТРЫЙ СТАРТ                                   │
@@ -117,12 +139,11 @@ python src/main.py
 │  └────────────────────────────────────────────────┘ │
 │                                                     │
 │  ┌────────────────────────────────────────────────┐ │
-│  │ ⚡ БЫСТРЫЙ БУСТ                                 │ │
-│  │ GPU Optimize + RAM Cleanup + System Tweaks     │ │
+│  │ 🎮 АКТИВНЫЕ ИГРЫ                                │ │
 │  │                                                │ │
-│  │ 📈 Ожидаемый прирост: +30-50 FPS               │ │
-│  │                                                │ │
-│  │  🚀 ЗАПУСТИТЬ ОПТИМИЗАЦИЮ                      │ │
+│  │ ▶️ GTA 5 - Профиль активен (+100 MHz GPU)     │ │
+│  │ 📊 RAM Cleanup: 847 MB freed                   │ │
+│  │ ⚡ Priority: HIGH | Power: High Performance    │ │
 │  └────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ```
@@ -138,11 +159,10 @@ python src/main.py
 │ 🏠  ГЛАВНАЯ      │ ← Active
 │ ⚡  GPU CONTROL  │
 │ 🧠  RAM TUNER    │
-│ 🎮  FRAMEGEN     │
-│ 🎯  ИГРЫ         │
+│ 🎮  ИГРЫ         │ ← NEW!
 │ ⚙️  НАСТРОЙКИ    │
 ├──────────────────┤
-│   v0.2.0-alpha   │
+│   v0.3.0-alpha   │
 └──────────────────┘
 ```
 
@@ -152,8 +172,14 @@ python src/main.py
 
 ### Мониторинг
 - **pynvml** (13.0.1+) — NVIDIA GPU мониторинг
-- **psutil** (7.2.1+) — CPU/RAM мониторинг
+- **psutil** (7.2.1+) — CPU/RAM/Process мониторинг
 - **wmi** (1.5.1+) — XMP detection
+
+### Оптимизация (NEW!)
+- **ctypes** — EmptyWorkingSet для RAM cleanup
+- **subprocess** — Power Plan management (powercfg)
+- **psutil** — Process priority control
+- **MSI Afterburner** (опционально) — GPU overclocking
 
 ### UI
 - **PyQt6** (6.10+) — современный интерфейс
@@ -172,25 +198,94 @@ python src/main.py
 ```
 partmart-boost/
 ├─ launch.bat                      # 🚀 Launcher (1-click)
-├─ VERSION                         # Версия (0.2.0-alpha)
+├─ VERSION                         # Версия (0.3.0-alpha)
 ├─ src/
 │  ├─ main.py                      # Entry point
-│  ├─ system_monitor.py            # 🆕 Реальный мониторинг
+│  ├─ system_monitor.py            # Реальный мониторинг
 │  ├─ ai_optimizer.py              # AI рекомендации
+│  ├─ profiles/                    # 🆕 Game Profiles System
+│  │  ├─ game_profiles.py          # Менеджер профилей
+│  │  ├─ game_detector.py          # Детектор игр
+│  │  └─ optimization_applier.py   # Применение оптимизаций
 │  ├─ ui/
-│  │  ├─ main_window.py            # 🆕 Главное окно с автообновлением
+│  │  ├─ main_window.py            # Главное окно
 │  │  ├─ ai_widget.py              # AI insights widget
 │  │  └─ theme.qss                 # Steam-inspired theme
 │  └─ gpu/
 │     ├─ nvidia_control.py         # NVIDIA (pynvml)
 │     └─ amd_control.py            # AMD (симуляция)
+├─ config/
+│  └─ profiles/                    # JSON профили игр
 ├─ requirements.txt                # Зависимости
 └─ README.md                       # Это файл
 ```
 
 ---
 
+## 🎮 Как использовать Game Profiles
+
+### Автоматический режим (рекомендуется)
+```bash
+# Запустить фоновый сервис
+python src/profiles/game_detector.py
+
+# Теперь просто запусти любимую игру!
+# Приложение автоматически:
+# 1. Обнаружит игру
+# 2. Применит оптимальный профиль
+# 3. Очистит RAM
+# 4. Повысит приоритет процесса
+# 5. Включит High Performance режим
+```
+
+### Ручной режим
+```python
+from src.profiles.game_profiles import GameProfileManager
+from src.profiles.optimization_applier import ProfileApplier
+
+# Создать менеджер профилей
+manager = GameProfileManager()
+
+# Получить профиль для игры
+profile = manager.get_profile("gta5")
+
+# Применить оптимизации
+applier = ProfileApplier()
+applier.apply_profile(profile, game_pid)
+```
+
+### Создать свой профиль
+```python
+from src.profiles.game_profiles import GameProfileManager
+
+manager = GameProfileManager()
+
+# Создать профиль для новой игры
+manager.create_profile(
+    game_id="my_game",
+    game_name="My Awesome Game",
+    executable="game.exe",
+    gpu_clock_offset=120,
+    gpu_mem_offset=450,
+    gpu_power_limit=110,
+    ram_cleanup=True,
+    ram_priority="high"
+)
+```
+
+---
+
 ## 🔧 Устранение проблем
+
+### Game Profiles не применяются
+1. Убедись, что запущен `game_detector.py`
+2. Проверь, что игра в списке поддерживаемых
+3. Запусти от имени администратора (для повышения приоритета)
+
+### GPU Overclocking не работает
+- Установи [MSI Afterburner](https://www.msi.com/Landing/afterburner)
+- Убедись, что он запущен в фоне
+- Проверь путь в `optimization_applier.py`
 
 ### Ошибка "Could not parse stylesheet"
 ✅ **Исправлено в v0.2** — убраны некорректные CSS свойства из QSS
@@ -198,28 +293,21 @@ partmart-boost/
 ### Статичные данные (температура не меняется)
 ✅ **Исправлено в v0.2** — реальное чтение через pynvml/psutil + QTimer
 
-### Неверная температура GPU (+18°C разница)
-✅ **Исправлено в v0.2** — теперь используется hotspot temperature (если доступна)
-
-### XMP статус неверный
-✅ **Исправлено в v0.2** — реальное чтение через WMI (ConfiguredClockSpeed)
-
-### Python 3.14 не поддерживается
-✅ **Исправлено** — обновлены зависимости (PyQt6 6.10+, PyInstaller 6.15+)
-
 ---
 
 ## 🛡️ Безопасность
 
-### Текущая версия (v0.2-alpha)
-- ✅ **Только чтение** — никаких изменений системы
-- ✅ **Безопасный мониторинг** — стандартные API (pynvml, psutil)
-- ✅ **Без прав администратора** — для базового мониторинга
+### Текущая версия (v0.3-alpha)
+- ✅ **RAM Cleanup** — безопасный EmptyWorkingSet (Windows API)
+- ✅ **Process Priority** — безопасное повышение через psutil
+- ✅ **Power Plans** — стандартный powercfg
+- ⚠️ **GPU OC** — только с MSI Afterburner (безопасно)
+- ✅ **Auto-revert** — восстановление настроек после закрытия игры
 
 ### Будущие версии (v0.5+)
-- ⏳ **Права админа** — для GPU/RAM оптимизации
-- ⏳ **Auto-revert** — откат при крашах
-- ⏳ **Stability test** — перед применением твиков
+- ⏳ **Права админа** — для полного доступа к оптимизациям
+- ⏳ **Stability test** — перед применением агрессивных твиков
+- ⏳ **Backup system** — автоматическое сохранение дефолтных настроек
 
 ---
 
@@ -227,9 +315,9 @@ partmart-boost/
 
 | Версия | Статус | Фичи |
 |--------|--------|------|
-| **v0.2-alpha** | ✅ **ТЕКУЩАЯ** | Реальный мониторинг, Steam UI, launch.bat |
-| **v0.3-alpha** | 🔄 В разработке | GPU Optimizer (NVIDIA), RAM XMP Enable |
-| **v0.5-beta** | 📅 Февраль 2026 | AMD GPU, FrameGen (FSR 3), Game profiles |
+| **v0.3-alpha** | ✅ **ТЕКУЩАЯ** | Game Profiles, RAM cleanup, Process priority |
+| **v0.4-alpha** | 🔄 В разработке | Интеграция профилей в UI, AMD GPU поддержка |
+| **v0.5-beta** | 📅 Февраль 2026 | FrameGen (FSR 3), RAM XMP Enable, RTSS Overlay |
 | **v1.0-release** | 📅 Март 2026 | Premium tier, NSIS installer, Code signing |
 
 ---
@@ -237,14 +325,26 @@ partmart-boost/
 ## 🐛 Известные проблемы
 
 - ⚠️ **CPU температура**: не работает без OpenHardwareMonitor/HWiNFO
-- ⚠️ **AMD GPU**: пока только симуляция (реальный контроль в v0.3)
-- ⚠️ **Quick Boost**: UI есть, функционал в разработке
+- ⚠️ **AMD GPU OC**: пока только симуляция (реальный контроль в v0.4)
+- ⚠️ **MSI Afterburner CLI**: нужна документация по флагам командной строки
+- ⚠️ **Game detection**: может пропустить игры с нестандартными процессами
 
 **Отчеты о багах**: [GitHub Issues](https://github.com/vitorpixel-6436/partmart-boost/issues)
 
 ---
 
 ## 📝 Changelog
+
+### v0.3.0-alpha (28 января 2026) — **GAME PROFILES**
+- ✅ **Новинка**: Система игровых профилей
+- ✅ Автоматическое обнаружение 8 популярных игр
+- ✅ RAM cleanup перед запуском (EmptyWorkingSet)
+- ✅ Управление приоритетом процессов
+- ✅ Автоматическое переключение Power Plans
+- ✅ Частичная интеграция GPU overclocking (MSI Afterburner)
+- ✅ JSON-based профили (легко редактировать)
+- ✅ Callbacks при запуске/закрытии игр
+- 📄 Обновлена документация
 
 ### v0.2.0-alpha (28 января 2026)
 - ✅ Добавлен реальный мониторинг GPU/CPU/RAM
@@ -281,9 +381,10 @@ partmart-boost/
 - NVIDIA NVML SDK
 - PyQt6 community
 - Steam (design inspiration)
+- MSI Afterburner team
 
 ---
 
 **🚀 Твой ПК. Твоя мощь.**
 
-*PartMart Boost — real-time PC optimization*
+*PartMart Boost — real-time PC optimization with intelligent game profiles*
