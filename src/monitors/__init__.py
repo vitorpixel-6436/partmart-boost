@@ -1,5 +1,7 @@
 """Hardware monitoring modules for PartMart Boost
+
 Optimized monitors with <10ms latency
+Version: 0.3.5c_hotfix2
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
@@ -26,10 +28,12 @@ class BaseMonitor(ABC):
         """Get hardware name/identifier"""
         pass
     
-    @abstractmethod
     def is_available(self) -> bool:
-        """Check if monitor is available"""
-        pass
+        """Check if monitor is available
+        
+        FIX BUG #5: Add default implementation
+        """
+        return self.available
     
     def get_last_error(self) -> Optional[str]:
         """Get last error message"""
@@ -41,8 +45,7 @@ class BaseMonitor(ABC):
         self.available = False
 
 
-# FIX: Don't import here to avoid circular imports
-# Import monitors only when needed (lazy loading)
+# Export base class only
 __all__ = [
     'BaseMonitor',
 ]

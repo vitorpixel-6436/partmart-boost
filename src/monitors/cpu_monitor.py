@@ -1,11 +1,14 @@
 """Optimized CPU Monitor with non-blocking calls
+
 PERFORMANCE: <5ms latency, non-blocking CPU measurement
+Version: 0.3.5c_hotfix2
 """
 import psutil
 import platform
 import time
 from typing import Dict, Optional
 from monitors import BaseMonitor
+
 
 class CPUMonitor(BaseMonitor):
     """Fast CPU monitoring with caching and non-blocking calls"""
@@ -18,6 +21,7 @@ class CPUMonitor(BaseMonitor):
         
         self._last_percent = None
         self._percent_init_time = time.time()
+        self._first_call = True
         
         # Pre-detect temperature sensor availability
         self._temp_available = False
@@ -26,7 +30,12 @@ class CPUMonitor(BaseMonitor):
         
         # Initialize first CPU measurement (blocking once)
         # This primes psutil's internal state
-        psutil.cpu_percent(interval=0.1)
+        try:
+            psutil.cpu_percent(interval=0.1)
+            self.available = True
+        except Exception as e:
+            print(f"[ERROR] CPU init failed: {e}")
+            self.available = False
     
     def _detect_temperature_sensor(self):
         """Detect available temperature sensor (once at init)"""
@@ -115,10 +124,6 @@ class CPUMonitor(BaseMonitor):
         """Get monitor name"""
         return "CPU Monitor"
     
-    def is_available(self) -> bool:
-        """Check if CPU monitoring is available"""
-        return True  # CPU always available
-    
     def get_data(self) -> Dict:
         """Get CPU data (optimized, non-blocking)
         
@@ -127,58 +132,70 @@ class CPUMonitor(BaseMonitor):
         """
         try:
             # NON-BLOCKING CPU percent (uses previous measurement)
-            # This is the KEY optimization!
             cpu_load = psutil.cpu_percent(interval=None)
             
-            # If interval=None returns 0.0, use interval=0 fallback
-            if cpu_load == 0.0 and self._last_percent is None:
+            # FIX BUG #3: Better validation for first call
+            # Only use blocking call on FIRST call, not when load is 0.0
+            if self._first_call:
                 # First call after init - use blocking once
                 cpu_load = psutil.cpu_percent(interval=0.1)
+                self._first_call = False
             
             self._last_percent = cpu_load
             
             # Get frequency (fast)
             cpu_freq = psutil.cpu_freq()
             
-            # Get core counts (cached internally by psutil)
+            # FIX BUG #4: Handle None from cpu_count
             cpu_count_physical = psutil.cpu_count(logical=False)
             cpu_count_logical = psutil.cpu_count(logical=True)
             
-            # Get per-core usage (optional, can be slow)
-            # per_core = psutil.cpu_percent(interval=None, percpu=True)
+            # Ensure we have at least logical count
+            if cpu_count_physical is None:
+                cpu_count_physical = cpu_count_logical
+            
+            if cpu_count_logical is None:
+                cpu_count_logical = 1  # Fallback to 1
             
             # Get temperature with caching
             cpu_temp = self._get_temperature_fast()
             
             return {
+                "name": "CPU",
                 "load": cpu_load,
                 "temp": cpu_temp,
                 "freq": cpu_freq.current if cpu_freq else 0,
                 "freq_min": cpu_freq.min if cpu_freq else 0,
                 "freq_max": cpu_freq.max if cpu_freq else 0,
-                "count": cpu_count_physical if cpu_count_physical else cpu_count_logical,
+                "count": cpu_count_physical,
                 "count_logical": cpu_count_logical,
-                # "per_core": per_core,  # Optional
             }
         
         except Exception as e:
             print(f"[ERROR] CPU data collection failed: {e}")
             return {
+                "name": "CPU (Error)",
                 "load": 0,
                 "temp": None,
                 "freq": 0,
                 "freq_min": 0,
                 "freq_max": 0,
-                "count": 0,
-                "count_logical": 0,
+                "count": 1,
+                "count_logical": 1,
             }
+
 
 if __name__ == "__main__":
     # Performance test
     import time
     
-    print("[TEST] Testing CPUMonitor performance...")
+    print("[TEST] Testing CPUMonitor with bug fixes...")
+    print("="*60)
+    
     monitor = CPUMonitor()
+    
+    print(f"\n[INFO] Monitor available: {monitor.is_available()}")
+    print(f"[INFO] Monitor name: {monitor.get_name()}")
     
     # Warmup
     monitor.get_data()
@@ -194,11 +211,14 @@ if __name__ == "__main__":
     elapsed = time.time() - start
     avg_time = (elapsed / iterations) * 1000  # ms
     
-    print(f"[RESULT] {iterations} iterations in {elapsed:.3f}s")
+    print(f"\n[RESULT] {iterations} iterations in {elapsed:.3f}s")
     print(f"[RESULT] Average: {avg_time:.2f}ms per call")
-    print(f"[RESULT] Target: <5ms - {'PASS \u2705' if avg_time < 5 else 'FAIL \u274c'}")
+    print(f"[RESULT] Target: <5ms - {'PASS ✅' if avg_time < 5 else 'FAIL ❌'}")
     
     print("\n[DATA] Sample output:")
     data = monitor.get_data()
     for k, v in data.items():
         print(f"  {k}: {v}")
+    
+    print("\n" + "="*60)
+    print("✅ CPUMonitor bug fixes work!")

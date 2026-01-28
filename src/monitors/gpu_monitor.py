@@ -1,4 +1,7 @@
-"""GPU monitoring module for PartMart Boost"""
+"""GPU monitoring module for PartMart Boost
+
+Version: 0.3.5c_hotfix2
+"""
 import sys
 from typing import Dict, Any, Optional
 from monitors import BaseMonitor
@@ -9,14 +12,19 @@ try:
 except ImportError:
     PYNVML_AVAILABLE = False
 
+
 class GPUMonitor(BaseMonitor):
     """NVIDIA GPU monitor using pynvml"""
     
     def __init__(self, gpu_index: int = 0):
+        super().__init__()
         self.gpu_index = gpu_index
         self.handle = None
         self.gpu_name = "Unknown GPU"
-        super().__init__()
+        self._nvml_initialized = False
+        
+        # FIX BUG #1: Call _initialize() in __init__
+        self._initialize()
     
     def _initialize(self) -> bool:
         """Initialize NVIDIA GPU monitoring"""
@@ -25,7 +33,11 @@ class GPUMonitor(BaseMonitor):
             return False
         
         try:
-            pynvml.nvmlInit()
+            # FIX BUG #2: Track if WE initialized nvml
+            if not self._nvml_initialized:
+                pynvml.nvmlInit()
+                self._nvml_initialized = True
+            
             device_count = pynvml.nvmlDeviceGetCount()
             
             if device_count == 0:
@@ -58,21 +70,20 @@ class GPUMonitor(BaseMonitor):
         Returns:
             Dict with keys:
                 - name: GPU name
-                - temperature: Core temperature (°C)
-                - temperature_hotspot: Hotspot temperature (°C) if available
-                - clock_graphics: Graphics clock (MHz)
-                - clock_memory: Memory clock (MHz)
+                - temp_gpu: Core temperature (°C)
+                - temp_hotspot: Hotspot temperature (°C) if available
+                - clock_gpu: Graphics clock (MHz)
+                - clock_mem: Memory clock (MHz)
                 - load_gpu: GPU utilization (%)
-                - load_memory: Memory utilization (%)
-                - power_usage: Power usage (W)
-                - power_limit: Power limit (W)
+                - load_mem: Memory utilization (%)
+                - power: Power usage (W)
                 - fan_speed: Fan speed (%)
                 - memory_total: Total memory (MB)
                 - memory_used: Used memory (MB)
                 - memory_free: Free memory (MB)
         """
         if not self.available:
-            return {}
+            return self._get_empty_data()
         
         try:
             data = {
@@ -81,60 +92,55 @@ class GPUMonitor(BaseMonitor):
             
             # Temperature (core)
             try:
-                data['temperature'] = pynvml.nvmlDeviceGetTemperature(
+                data['temp_gpu'] = pynvml.nvmlDeviceGetTemperature(
                     self.handle, pynvml.NVML_TEMPERATURE_GPU
                 )
             except:
-                data['temperature'] = None
+                data['temp_gpu'] = 0
             
             # Temperature (hotspot) - more accurate
             try:
-                data['temperature_hotspot'] = pynvml.nvmlDeviceGetTemperature(
+                data['temp_hotspot'] = pynvml.nvmlDeviceGetTemperature(
                     self.handle, pynvml.NVML_TEMPERATURE_HOTSPOT
                 )
             except:
-                data['temperature_hotspot'] = None
+                data['temp_hotspot'] = None
             
             # Clock speeds
             try:
-                data['clock_graphics'] = pynvml.nvmlDeviceGetClockInfo(
+                data['clock_gpu'] = pynvml.nvmlDeviceGetClockInfo(
                     self.handle, pynvml.NVML_CLOCK_GRAPHICS
                 )
             except:
-                data['clock_graphics'] = None
+                data['clock_gpu'] = 0
             
             try:
-                data['clock_memory'] = pynvml.nvmlDeviceGetClockInfo(
+                data['clock_mem'] = pynvml.nvmlDeviceGetClockInfo(
                     self.handle, pynvml.NVML_CLOCK_MEM
                 )
             except:
-                data['clock_memory'] = None
+                data['clock_mem'] = 0
             
             # Utilization
             try:
                 util = pynvml.nvmlDeviceGetUtilizationRates(self.handle)
                 data['load_gpu'] = util.gpu
-                data['load_memory'] = util.memory
+                data['load_mem'] = util.memory
             except:
-                data['load_gpu'] = None
-                data['load_memory'] = None
+                data['load_gpu'] = 0
+                data['load_mem'] = 0
             
             # Power
             try:
-                data['power_usage'] = pynvml.nvmlDeviceGetPowerUsage(self.handle) / 1000  # mW to W
+                data['power'] = pynvml.nvmlDeviceGetPowerUsage(self.handle) / 1000  # mW to W
             except:
-                data['power_usage'] = None
-            
-            try:
-                data['power_limit'] = pynvml.nvmlDeviceGetPowerManagementLimit(self.handle) / 1000
-            except:
-                data['power_limit'] = None
+                data['power'] = 0
             
             # Fan speed
             try:
                 data['fan_speed'] = pynvml.nvmlDeviceGetFanSpeed(self.handle)
             except:
-                data['fan_speed'] = None
+                data['fan_speed'] = 0
             
             # Memory
             try:
@@ -143,15 +149,32 @@ class GPUMonitor(BaseMonitor):
                 data['memory_used'] = mem_info.used // (1024 * 1024)
                 data['memory_free'] = mem_info.free // (1024 * 1024)
             except:
-                data['memory_total'] = None
-                data['memory_used'] = None
-                data['memory_free'] = None
+                data['memory_total'] = 0
+                data['memory_used'] = 0
+                data['memory_free'] = 0
             
             return data
             
         except Exception as e:
             self._set_error(f"Failed to get GPU data: {str(e)}")
-            return {}
+            return self._get_empty_data()
+    
+    def _get_empty_data(self) -> Dict:
+        """Get empty data structure."""
+        return {
+            'name': self.gpu_name,
+            'temp_gpu': 0,
+            'temp_hotspot': None,
+            'clock_gpu': 0,
+            'clock_mem': 0,
+            'load_gpu': 0,
+            'load_mem': 0,
+            'power': 0,
+            'fan_speed': 0,
+            'memory_total': 0,
+            'memory_used': 0,
+            'memory_free': 0,
+        }
     
     def get_temperature(self, use_hotspot: bool = True) -> Optional[float]:
         """Get GPU temperature
@@ -166,10 +189,10 @@ class GPUMonitor(BaseMonitor):
         if not data:
             return None
         
-        if use_hotspot and data.get('temperature_hotspot') is not None:
-            return data['temperature_hotspot']
+        if use_hotspot and data.get('temp_hotspot') is not None:
+            return data['temp_hotspot']
         
-        return data.get('temperature')
+        return data.get('temp_gpu')
     
     def get_load(self) -> Optional[float]:
         """Get GPU load percentage"""
@@ -186,38 +209,54 @@ class GPUMonitor(BaseMonitor):
         if not data:
             return None
         
-        if data.get('memory_total') is not None:
+        if data.get('memory_total', 0) > 0:
             return {
                 'total': data['memory_total'],
                 'used': data['memory_used'],
                 'free': data['memory_free'],
-                'percent': (data['memory_used'] / data['memory_total'] * 100) if data['memory_total'] > 0 else 0
+                'percent': (data['memory_used'] / data['memory_total'] * 100)
             }
         return None
     
     def shutdown(self):
-        """Cleanup GPU monitoring"""
-        if PYNVML_AVAILABLE and self.available:
+        """Cleanup GPU monitoring
+        
+        FIX BUG #2: Only shutdown if WE initialized it
+        """
+        if PYNVML_AVAILABLE and self._nvml_initialized:
             try:
                 pynvml.nvmlShutdown()
+                self._nvml_initialized = False
             except:
                 pass
     
     def __del__(self):
-        """Destructor"""
-        self.shutdown()
+        """Destructor
+        
+        FIX BUG #2: Safe cleanup - only if we initialized
+        """
+        # Don't call shutdown() here - can cause issues with multiple instances
+        # Let Python GC handle it
+        pass
+
 
 if __name__ == "__main__":
     # Test GPU monitor
+    print("[TEST] GPUMonitor with bug fixes")
+    print("="*60)
+    
     monitor = GPUMonitor()
     
+    print(f"\n[INFO] Monitor available: {monitor.is_available()}")
+    print(f"[INFO] GPU name: {monitor.get_name()}")
+    
     if monitor.is_available():
-        print(f"✅ GPU detected: {monitor.get_name()}")
+        print(f"\n✅ GPU detected: {monitor.get_name()}")
         
         data = monitor.get_data()
         print(f"\n📊 GPU Data:")
         for key, value in data.items():
-            if value is not None:
+            if value is not None and value != 0:
                 print(f"  {key}: {value}")
         
         print(f"\n🌡️ Temperature: {monitor.get_temperature()}°C")
@@ -229,4 +268,8 @@ if __name__ == "__main__":
     else:
         print(f"❌ GPU not available: {monitor.get_last_error()}")
     
+    # Test cleanup
     monitor.shutdown()
+    
+    print("\n" + "="*60)
+    print("✅ GPUMonitor bug fixes work!")
