@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""
-SystemMonitor - Backward compatibility wrapper.
+"""SystemMonitor - Backward compatibility wrapper.
 
 Provides legacy SystemMonitor interface using new MonitorManager.
 
 Author: PartMart Team
-Version: 0.4.0-alpha
+Version: 0.3.5
 """
 
 from typing import Dict, Any
@@ -27,6 +26,7 @@ class SystemMonitor:
         """
         self.manager = MonitorManager(prefer_native=prefer_native)
         self._last_data = {}
+        self._debug = False  # Set to True for debugging
     
     def get_gpu_data(self) -> Dict[str, Any]:
         """Get GPU monitoring data.
@@ -42,21 +42,65 @@ class SystemMonitor:
         """
         # Get fresh data
         all_data = self.manager.get_all_data()
-        gpu_data = all_data.get('gpu', {})
+        gpu_raw = all_data.get('gpu', {})
         
-        # Transform to legacy format
-        return {
-            'name': gpu_data.get('name', 'Unknown GPU'),
-            'temperature': gpu_data.get('temp_gpu', 0),
-            'temp_hotspot': gpu_data.get('temp_hotspot'),
-            'load': gpu_data.get('load_gpu', 0),
-            'clock': gpu_data.get('clock_gpu', 0),
-            'memory_clock': gpu_data.get('clock_mem', 0),
-            'memory_used': gpu_data.get('mem_used', 0),
-            'memory_total': gpu_data.get('mem_total', 0),
-            'power': gpu_data.get('power', 0),
-            'fan_speed': gpu_data.get('fan_speed', 0),
+        if self._debug:
+            print(f"[DEBUG] Raw GPU data: {gpu_raw}")
+        
+        # Map keys from various possible sources
+        # Support both GPUMonitor (pynvml) and FallbackGPUMonitor formats
+        result = {
+            'name': gpu_raw.get('name', 'Unknown GPU'),
+            # Temperature - try multiple keys
+            'temperature': (
+                gpu_raw.get('temperature') or 
+                gpu_raw.get('temp_gpu') or 
+                gpu_raw.get('temp_hotspot') or 
+                0
+            ),
+            'temp_hotspot': gpu_raw.get('temperature_hotspot') or gpu_raw.get('temp_hotspot'),
+            # Load - try multiple keys
+            'load': (
+                gpu_raw.get('load_gpu') or 
+                gpu_raw.get('load') or 
+                0
+            ),
+            # Clock - try multiple keys
+            'clock': (
+                gpu_raw.get('clock_graphics') or 
+                gpu_raw.get('clock_gpu') or 
+                0
+            ),
+            'memory_clock': (
+                gpu_raw.get('clock_memory') or 
+                gpu_raw.get('clock_mem') or 
+                0
+            ),
+            # Memory - try multiple keys
+            'memory_used': (
+                gpu_raw.get('memory_used') or 
+                gpu_raw.get('mem_used') or 
+                0
+            ),
+            'memory_total': (
+                gpu_raw.get('memory_total') or 
+                gpu_raw.get('mem_total') or 
+                0
+            ),
+            # Power
+            'power': (
+                gpu_raw.get('power_usage') or 
+                gpu_raw.get('power') or 
+                0
+            ),
+            # Fan
+            'fan_speed': gpu_raw.get('fan_speed', 0),
         }
+        
+        if self._debug:
+            print(f"[DEBUG] Mapped GPU data: {result}")
+        
+        return result
     
     def get_ram_data(self) -> Dict[str, Any]:
         """Get RAM monitoring data.
@@ -164,30 +208,42 @@ def create_monitor(prefer_native: bool = False) -> SystemMonitor:
 
 if __name__ == '__main__':
     # Test legacy interface
-    print("[TEST] SystemMonitor Wrapper")
+    print("[TEST] SystemMonitor Wrapper v0.3.5")
     print("="*60)
     
     monitor = SystemMonitor()
+    monitor._debug = True  # Enable debug output
     
     print("\n[GPU Data]")
     gpu = monitor.get_gpu_data()
-    for k, v in list(gpu.items())[:5]:
-        print(f"  {k}: {v}")
+    print(f"  Name: {gpu['name']}")
+    print(f"  Temperature: {gpu['temperature']}°C")
+    print(f"  Load: {gpu['load']}%")
+    print(f"  Clock: {gpu['clock']} MHz")
+    print(f"  Memory: {gpu['memory_used']}/{gpu['memory_total']} MB")
     
     print("\n[CPU Data]")
     cpu = monitor.get_cpu_data()
-    for k, v in list(cpu.items())[:5]:
-        print(f"  {k}: {v}")
+    print(f"  Name: {cpu['name']}")
+    print(f"  Load: {cpu['load']}%")
+    print(f"  Frequency: {cpu['frequency']} MHz")
+    print(f"  Cores: {cpu['cores']} / Threads: {cpu['threads']}")
+    if cpu['temperature']:
+        print(f"  Temperature: {cpu['temperature']}°C")
     
     print("\n[RAM Data]")
     ram = monitor.get_ram_data()
-    for k, v in ram.items():
-        print(f"  {k}: {v}")
+    print(f"  Total: {ram['total_gb']:.2f} GB")
+    print(f"  Used: {ram['used_gb']:.2f} GB ({ram['percent']:.1f}%)")
+    print(f"  Free: {ram['free_gb']:.2f} GB")
+    print(f"  Speed: {ram['speed']} MHz")
+    print(f"  Type: {ram['type']}")
     
     print("\n[Performance]")
     perf = monitor.get_performance_stats()
-    for k, v in perf.items():
-        print(f"  {k}: {v}")
+    print(f"  Average time: {perf['avg_time_ms']:.2f}ms")
+    print(f"  Last update: {perf['last_time_ms']:.2f}ms")
+    print(f"  Total updates: {perf['total_updates']}")
     
     print("\n" + "="*60)
-    print("✅ SystemMonitor wrapper works!")
+    print("✅ SystemMonitor wrapper v0.3.5 works!")
