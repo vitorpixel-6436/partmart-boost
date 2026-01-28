@@ -22,6 +22,17 @@ from ai_optimizer import PartMartAIOptimizer
 from system_monitor import SystemMonitor
 from ui.settings_dialog import SettingsDialog
 
+# Game Profiles imports
+try:
+    from profiles.game_profiles import GameProfileManager
+    from profiles.game_detector import GameDetector
+    from profiles.optimization_applier import ProfileApplier
+    from ui.games_widget import GamesWidget
+    GAMES_AVAILABLE = True
+except ImportError as e:
+    print(f"Game Profiles not available: {e}")
+    GAMES_AVAILABLE = False
+
 class MetricCard(QFrame):
     """Metric card with localized labels"""
     
@@ -153,11 +164,27 @@ class PartMartMainWindow(QMainWindow):
         self.ram_card = None
         self.cpu_card = None
         
+        # Initialize Game Profiles system
+        if GAMES_AVAILABLE:
+            try:
+                self.profile_manager = GameProfileManager(profiles_dir="config/profiles")
+                self.game_detector = GameDetector(self.profile_manager)
+                self.profile_applier = ProfileApplier()
+                
+                # Setup callbacks
+                self.game_detector.on_game_started = self._on_game_started
+                self.game_detector.on_game_stopped = self._on_game_stopped
+                
+                self.logger.info("Game Profiles system initialized")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Game Profiles: {e}")
+                GAMES_AVAILABLE = False
+        
         self._setup_ui()
         self._create_menu_bar()
         
         # Log startup
-        self.logger.log_startup("0.3.4-alpha")
+        self.logger.log_startup("0.4.0-alpha")
         
         # Auto-update timer
         update_interval = self.config.get_update_interval()
@@ -165,9 +192,15 @@ class PartMartMainWindow(QMainWindow):
         self.update_timer.timeout.connect(self._update_system_data)
         self.update_timer.start(update_interval)
         self._update_system_data()
+        
+        # Game detection timer
+        if GAMES_AVAILABLE:
+            self.game_timer = QTimer()
+            self.game_timer.timeout.connect(self._update_game_detection)
+            self.game_timer.start(3000)  # Check every 3 seconds
 
     def _setup_ui(self):
-        self.setWindowTitle(t('window_title', version='0.3.4'))
+        self.setWindowTitle(t('window_title', version='0.4.0'))
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 700)
         
@@ -201,7 +234,17 @@ class PartMartMainWindow(QMainWindow):
         self.page_gpu = self._create_gpu_page()
         self.page_ram = self._create_placeholder("ram_tuner")
         
-        for page in [self.page_home, self.page_gpu, self.page_ram]:
+        pages = [self.page_home, self.page_gpu, self.page_ram]
+        
+        # Add Games page if available
+        if GAMES_AVAILABLE:
+            self.page_games = GamesWidget(self.profile_manager, self.game_detector)
+            pages.append(self.page_games)
+        else:
+            self.page_games = self._create_placeholder("games")
+            pages.append(self.page_games)
+        
+        for page in pages:
             self.content_stack.addWidget(page)
         
         main_layout.addWidget(self.content_stack, 1)
@@ -274,6 +317,7 @@ class PartMartMainWindow(QMainWindow):
             ("home", "🏠", 0),
             ("gpu_control", "🎮", 1),
             ("ram_tuner", "🧠", 2),
+            ("games", "🎮", 3),  # NEW!
         ]
         
         for key, icon, index in tabs:
@@ -298,9 +342,12 @@ class PartMartMainWindow(QMainWindow):
             ("home", "🏠"),
             ("gpu_control", "🎮"),
             ("ram_tuner", "🧠"),
+            ("games", "🎮"),  # NEW!
         ]
         for btn, (key, icon) in zip(self.nav_buttons, tabs):
-            btn.setText(f"{icon} {t(key)}")
+            # For "games" key, use fallback if translation missing
+            text = t(key) if key != 'games' else "Игры"
+            btn.setText(f"{icon} {text}")
 
     def _get_tab_style(self, active=False) -> str:
         if active:
@@ -394,6 +441,15 @@ class PartMartMainWindow(QMainWindow):
         
         self.gpu_action = self._create_action_card("gpu_control", "gpu_optimization", lambda: self._switch_page(1))
         self.ram_action = self._create_action_card("ram_tuner", "xmp_and_cleanup", lambda: self._switch_page(2))
+        
+        # Add Games action card if available
+        if GAMES_AVAILABLE:
+            self.games_action = self._create_action_card(
+                "games", 
+                "Auto-optimize games",
+                lambda: self._switch_page(3)
+            )
+            actions.addWidget(self.games_action)
         
         actions.addWidget(self.gpu_action)
         actions.addWidget(self.ram_action)
@@ -524,6 +580,12 @@ class PartMartMainWindow(QMainWindow):
         card.title_label = title_label
         card.desc_label = desc_label
         
+        # Set text
+        title_text = t(title_key) if title_key != 'games' else "Игры"
+        desc_text = desc_key  # Use as-is for now
+        title_label.setText(title_text)
+        desc_label.setText(desc_text)
+        
         return card
 
     def _create_gpu_page(self) -> QWidget:
@@ -590,6 +652,11 @@ class PartMartMainWindow(QMainWindow):
         page.setLayout(layout)
         page.title_label = title
         page.placeholder_label = placeholder
+        
+        # Set text for games page
+        if title_key == 'games':
+            title.setText("Игры")
+        
         return page
 
     def _quick_boost(self):
@@ -666,6 +733,43 @@ class PartMartMainWindow(QMainWindow):
         
         except Exception as e:
             self.logger.error(f"Failed to update system data: {e}")
+    
+    def _update_game_detection(self):
+        """Update game detection"""
+        if GAMES_AVAILABLE and hasattr(self, 'game_detector'):
+            try:
+                self.game_detector.update()
+            except Exception as e:
+                self.logger.error(f"Game detection error: {e}")
+    
+    def _on_game_started(self, game):
+        """Called when game starts"""
+        self.logger.info(f"Game started: {game.profile.game_name}")
+        
+        try:
+            # Apply profile
+            self.profile_applier.apply_profile(game.profile, game.pid)
+            self.game_detector.mark_profile_applied(game.pid)
+            
+            # Show notification
+            QMessageBox.information(
+                self,
+                "Игра обнаружена",
+                f"🎮 {game.profile.game_name}\n\n"
+                f"Профиль оптимизации применён!"
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to apply game profile: {e}")
+    
+    def _on_game_stopped(self, game):
+        """Called when game stops"""
+        self.logger.info(f"Game stopped: {game.profile.game_name}")
+        
+        try:
+            # Revert optimizations
+            self.profile_applier.revert_optimizations()
+        except Exception as e:
+            self.logger.error(f"Failed to revert optimizations: {e}")
 
     def _show_settings(self):
         """Show settings dialog"""
@@ -686,7 +790,7 @@ class PartMartMainWindow(QMainWindow):
 
     def _refresh_ui_texts(self):
         """Refresh all UI texts with new language"""
-        self.setWindowTitle(t('window_title', version='0.3.4'))
+        self.setWindowTitle(t('window_title', version='0.4.0'))
         self._update_nav_texts()
         
         # Update cards
@@ -698,11 +802,16 @@ class PartMartMainWindow(QMainWindow):
         self.boost_btn.setText(f"⚡ {t('quick_boost')}")
         
         # Update action cards
-        for card in [self.gpu_action, self.ram_action]:
+        cards = [self.gpu_action, self.ram_action]
+        if GAMES_AVAILABLE and hasattr(self, 'games_action'):
+            cards.append(self.games_action)
+        
+        for card in cards:
             title_key = card.property('title_key')
             desc_key = card.property('desc_key')
-            card.title_label.setText(t(title_key))
-            card.desc_label.setText(t(desc_key))
+            title_text = t(title_key) if title_key != 'games' else "Игры"
+            card.title_label.setText(title_text)
+            card.desc_label.setText(desc_key)
         
         # Update placeholder pages
         for page in [self.page_gpu, self.page_ram]:
@@ -720,7 +829,7 @@ class PartMartMainWindow(QMainWindow):
         QMessageBox.about(
             self,
             t('about'),
-            t('about_text', version='0.3.4')
+            t('about_text', version='0.4.0')
         )
 
     def closeEvent(self, event):
