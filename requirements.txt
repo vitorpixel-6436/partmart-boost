@@ -1,5 +1,5 @@
 # Core dependencies (Python 3.14 compatible)
-pynvml>=11.5.0              # NVIDIA GPU monitoring & control
+nvidia-ml-py>=12.560.30    # NVIDIA GPU monitoring & control (replaces pynvml)
 psutil>=5.9.5               # System monitoring (CPU, RAM, processes)
 PyQt6>=6.8.0                # UI framework (3.14 support)
 wmi>=1.5.1                  # Windows Management Instrumentation
