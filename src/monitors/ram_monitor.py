@@ -1,316 +1,243 @@
-"""RAM monitoring module with XMP detection and speed reporting"""
-from typing import Dict, Optional
-import sys
-import os
+"""RAM Monitor - Efficient RAM metrics collection
+OPTIMIZED: Cached speed detection, safe WMI usage
+SECURITY: Uses SafeWMI wrapper for Windows
+"""
+import psutil
 import platform
+from typing import Dict, Optional
+from monitors import BaseMonitor
 
-# Add parent dir to path for imports
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-try:
-    import psutil
-    PSUTIL_AVAILABLE = True
-except ImportError:
-    PSUTIL_AVAILABLE = False
-
-try:
-    if platform.system() == "Windows":
-        import wmi
-        WMI_AVAILABLE = True
-    else:
-        WMI_AVAILABLE = False
-except ImportError:
-    WMI_AVAILABLE = False
-
-try:
-    from core.logger import get_logger
-    logger = get_logger()
-except:
-    logger = None
-
-
-class RAMMonitor:
-    """Monitor RAM usage, speed, and XMP status
-    
-    Features:
-    - Memory usage (total, used, free, percentage)
-    - Memory speed (MHz) on Windows via WMI
-    - XMP detection (heuristic-based)
-    - Memory type detection (DDR4, DDR5, etc.)
-    - Cross-platform support
-    
-    Example:
-        >>> monitor = RAMMonitor()
-        >>> data = monitor.get_data()
-        >>> print(f"RAM: {data['used']:.1f} / {data['total']:.1f} GB")
-        >>> print(f"Speed: {data['speed']} MHz")
-        >>> print(f"XMP: {'Enabled' if data['xmp_enabled'] else 'Disabled'}")
-    """
+class RAMMonitor(BaseMonitor):
+    """Monitor RAM usage, speed, and XMP status"""
     
     def __init__(self):
-        """Initialize RAM monitoring"""
-        self._available = PSUTIL_AVAILABLE
-        self._wmi_available = WMI_AVAILABLE
+        super().__init__()
+        self._cache_duration = 1.0  # Cache for 1 second
+        self._last_data = None
         self._platform = platform.system()
-        self._wmi_connection = None
         
-        # Cache for static data (speed, type)
-        self._speed_cache: Optional[int] = None
-        self._type_cache: Optional[str] = None
-        self._xmp_cache: Optional[bool] = None
+        # Static info (cached permanently)
+        self._total_ram = psutil.virtual_memory().total / (1024**3)  # GB
+        self._ram_speed = None
+        self._xmp_enabled = False
+        self._ram_type = None
         
-        if self._available:
-            self._log_info(f"RAM monitoring initialized on {self._platform}")
-            if self._wmi_available:
-                self._init_wmi()
-        else:
-            self._log_error("psutil not available - RAM monitoring disabled")
+        # Detect RAM speed once
+        self._detect_ram_info()
     
-    def _init_wmi(self):
-        """Initialize WMI connection for Windows hardware info"""
-        try:
-            self._wmi_connection = wmi.WMI()
-            self._log_info("WMI connection established")
-            
-            # Pre-fetch static RAM info
-            self._fetch_static_info()
-        except Exception as e:
-            self._log_warning(f"WMI initialization failed: {e}")
-            self._wmi_connection = None
-    
-    def _fetch_static_info(self):
-        """Fetch static RAM info (speed, type, XMP) that won't change
+    def _detect_ram_info(self):
+        """Detect RAM speed and XMP status (Windows only)
         
-        Caches results to avoid repeated WMI queries.
+        Uses SafeWMI wrapper for security
         """
-        if not self._wmi_connection:
+        if self._platform != "Windows":
             return
         
         try:
-            for mem in self._wmi_connection.Win32_PhysicalMemory():
-                # Get speed (MHz)
-                if hasattr(mem, 'ConfiguredClockSpeed') and mem.ConfiguredClockSpeed:
-                    self._speed_cache = mem.ConfiguredClockSpeed
+            # SECURITY: Use safe WMI wrapper
+            from core.safe_wmi import get_safe_wmi
+            
+            wmi = get_safe_wmi()
+            
+            if wmi.is_available():
+                # Get RAM speed safely
+                self._ram_speed = wmi.get_ram_speed()
                 
-                # Get memory type (DDR4 = 26, DDR5 = 34)
-                if hasattr(mem, 'SMBIOSMemoryType'):
-                    type_code = mem.SMBIOSMemoryType
-                    type_map = {
-                        26: "DDR4",
-                        34: "DDR5",
-                        24: "DDR3",
-                        22: "DDR2",
-                        21: "DDR",
-                    }
-                    self._type_cache = type_map.get(type_code, f"Unknown ({type_code})")
+                if self._ram_speed:
+                    # Heuristic: XMP likely enabled if speed > 2400 for DDR4
+                    # or > 3200 for DDR5
+                    if self._ram_speed > 3200:
+                        self._xmp_enabled = True
+                        self._ram_type = "DDR5"
+                    elif self._ram_speed > 2400:
+                        self._xmp_enabled = True
+                        self._ram_type = "DDR4"
+                    elif self._ram_speed > 1600:
+                        self._ram_type = "DDR4"
+                    else:
+                        self._ram_type = "DDR3"
                 
-                # Only need one stick's info
-                break
-            
-            # Determine XMP status (heuristic)
-            if self._speed_cache:
-                self._xmp_cache = self._is_xmp_enabled(self._speed_cache, self._type_cache)
-            
-            self._log_info(f"RAM: {self._type_cache} @ {self._speed_cache} MHz (XMP: {self._xmp_cache})")
-            
+                print(f"[INFO] RAM Speed: {self._ram_speed} MHz ({self._ram_type})")
+                if self._xmp_enabled:
+                    print(f"[INFO] XMP/DOCP likely enabled")
+        
+        except ImportError:
+            print("[INFO] SafeWMI not available, RAM speed detection disabled")
         except Exception as e:
-            self._log_warning(f"Failed to fetch RAM static info: {e}")
-    
-    def _is_xmp_enabled(self, speed: int, mem_type: Optional[str]) -> bool:
-        """Heuristic to determine if XMP/DOCP is enabled
-        
-        Args:
-            speed: Configured RAM speed (MHz)
-            mem_type: Memory type (DDR4, DDR5, etc.)
-        
-        Returns:
-            True if speed suggests XMP is enabled
-        
-        Note:
-            This is a heuristic. True detection requires BIOS/SPD reading.
-            - DDR4: JEDEC max is 2133 MHz, XMP profiles are 2400-4000+ MHz
-            - DDR5: JEDEC max is 4800 MHz, XMP profiles are 5200+ MHz
-        """
-        if mem_type == "DDR5":
-            # DDR5 JEDEC: 4800 MHz default
-            return speed > 4800
-        elif mem_type == "DDR4":
-            # DDR4 JEDEC: 2133 MHz default
-            return speed > 2133
-        elif mem_type == "DDR3":
-            # DDR3 JEDEC: 1333-1600 MHz
-            return speed > 1600
-        else:
-            # Unknown type - assume XMP if speed > 2400
-            return speed > 2400
-    
-    def is_available(self) -> bool:
-        """Check if RAM monitoring is available
-        
-        Returns:
-            True if psutil available
-        """
-        return self._available
+            print(f"[WARN] RAM speed detection failed: {e}")
     
     def get_data(self) -> Dict:
-        """Get all RAM data in one call
+        """Get RAM metrics
         
         Returns:
             Dictionary with RAM metrics:
-            - total: Total RAM (GB)
-            - used: Used RAM (GB)
-            - free: Available RAM (GB)
+            - total: Total RAM in GB
+            - used: Used RAM in GB
+            - free: Available RAM in GB
             - percent: Usage percentage (0-100%)
-            - speed: RAM speed (MHz) or 0 if unavailable
-            - type: Memory type (DDR4, DDR5, etc.) or None
-            - xmp_enabled: True if XMP/DOCP likely enabled
-        
-        Note:
-            Speed and XMP detection only available on Windows with WMI.
+            - speed: RAM speed in MHz (or None)
+            - xmp_enabled: XMP/DOCP status (heuristic)
+            - type: DDR type (DDR3/DDR4/DDR5)
         """
-        if not self._available:
-            return self._get_empty_data()
+        # OPTIMIZATION: Return cached data if fresh
+        if self._is_cache_valid():
+            return self._last_data
         
         try:
-            # Get dynamic memory usage
+            # OPTIMIZATION: Single psutil call for all metrics
             ram = psutil.virtual_memory()
             
-            total = ram.total / (1024**3)  # Bytes to GB
-            used = ram.used / (1024**3)
-            free = ram.available / (1024**3)
-            percent = ram.percent
-            
-            # Get static info from cache (or fetch if not cached)
-            if self._speed_cache is None and self._wmi_available and self._wmi_connection:
-                self._fetch_static_info()
-            
-            return {
-                "total": total,
-                "used": used,
-                "free": free,
-                "percent": percent,
-                "speed": self._speed_cache or 0,
-                "type": self._type_cache,
-                "xmp_enabled": self._xmp_cache if self._xmp_cache is not None else False,
+            data = {
+                "total": ram.total / (1024**3),
+                "used": ram.used / (1024**3),
+                "free": ram.available / (1024**3),
+                "percent": ram.percent,
+                "speed": self._ram_speed,
+                "xmp_enabled": self._xmp_enabled,
+                "type": self._ram_type,
             }
             
-        except Exception as e:
-            self._log_error(f"Error reading RAM data: {e}")
-            return self._get_empty_data()
-    
-    def get_detailed_info(self) -> Dict:
-        """Get detailed RAM stick information (Windows only)
-        
-        Returns:
-            Dictionary with detailed info about each RAM stick:
-            - sticks: List of RAM modules with capacity, speed, manufacturer
-        
-        Note:
-            Only works on Windows with WMI.
-        """
-        if not self._wmi_connection:
-            return {"sticks": []}
-        
-        sticks = []
-        try:
-            for mem in self._wmi_connection.Win32_PhysicalMemory():
-                stick_info = {}
-                
-                if hasattr(mem, 'Capacity'):
-                    stick_info['capacity_gb'] = int(mem.Capacity) / (1024**3)
-                
-                if hasattr(mem, 'ConfiguredClockSpeed'):
-                    stick_info['speed_mhz'] = mem.ConfiguredClockSpeed
-                
-                if hasattr(mem, 'Manufacturer'):
-                    stick_info['manufacturer'] = mem.Manufacturer.strip()
-                
-                if hasattr(mem, 'PartNumber'):
-                    stick_info['part_number'] = mem.PartNumber.strip()
-                
-                if hasattr(mem, 'DeviceLocator'):
-                    stick_info['slot'] = mem.DeviceLocator
-                
-                sticks.append(stick_info)
+            # Update cache
+            self._update_cache(data)
+            
+            return data
             
         except Exception as e:
-            self._log_error(f"Failed to get detailed RAM info: {e}")
-        
-        return {"sticks": sticks}
+            print(f"[ERROR] RAM data collection failed: {e}")
+            return {
+                "total": self._total_ram,
+                "used": 0,
+                "free": self._total_ram,
+                "percent": 0,
+                "speed": self._ram_speed,
+                "xmp_enabled": self._xmp_enabled,
+                "type": self._ram_type,
+            }
     
-    def _get_empty_data(self) -> Dict:
-        """Return empty data structure when RAM unavailable
+    def get_name(self) -> str:
+        """Get monitor name"""
+        return "RAM Monitor"
+    
+    def is_available(self) -> bool:
+        """Check if RAM monitoring is available"""
+        return True  # psutil always available
+    
+    def get_detailed_info(self) -> Dict:
+        """Get detailed RAM information
         
         Returns:
-            Dictionary with all fields set to 0/None
+            Extended RAM info
         """
-        return {
-            "total": 0.0,
-            "used": 0.0,
-            "free": 0.0,
-            "percent": 0.0,
-            "speed": 0,
-            "type": None,
-            "xmp_enabled": False,
-        }
+        try:
+            ram = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+            
+            return {
+                "platform": self._platform,
+                "total_bytes": ram.total,
+                "available_bytes": ram.available,
+                "used_bytes": ram.used,
+                "cached_bytes": getattr(ram, 'cached', 0),
+                "buffers_bytes": getattr(ram, 'buffers', 0),
+                "swap_total": swap.total / (1024**3),
+                "swap_used": swap.used / (1024**3),
+                "swap_percent": swap.percent,
+                "ram_speed_mhz": self._ram_speed,
+                "ram_type": self._ram_type,
+                "xmp_docp_enabled": self._xmp_enabled,
+            }
+        except Exception as e:
+            print(f"[ERROR] RAM detailed info failed: {e}")
+            return {}
     
-    # Logging helpers
-    def _log_debug(self, message: str):
-        if logger:
-            logger.debug(f"[RAM Monitor] {message}")
-    
-    def _log_info(self, message: str):
-        if logger:
-            logger.info(f"[RAM Monitor] {message}")
-        else:
-            print(f"[RAM Monitor] INFO: {message}")
-    
-    def _log_warning(self, message: str):
-        if logger:
-            logger.warning(f"[RAM Monitor] {message}")
-        else:
-            print(f"[RAM Monitor] WARNING: {message}")
-    
-    def _log_error(self, message: str):
-        if logger:
-            logger.error(f"[RAM Monitor] {message}")
-        else:
-            print(f"[RAM Monitor] ERROR: {message}")
+    def get_optimization_suggestions(self) -> list:
+        """Get RAM optimization suggestions based on current state
+        
+        Returns:
+            List of actionable suggestions
+        """
+        suggestions = []
+        
+        try:
+            data = self.get_data()
+            
+            # High usage warning
+            if data['percent'] > 90:
+                suggestions.append("⚠️ RAM critically high (>90%)")
+                suggestions.append("🛠️ Close unused applications")
+            elif data['percent'] > 80:
+                suggestions.append("📄 RAM usage high (>80%)")
+                suggestions.append("📝 Consider closing some tabs/apps")
+            
+            # XMP status
+            if self._ram_speed:
+                if not self._xmp_enabled:
+                    suggestions.append("🚀 XMP/DOCP not enabled")
+                    suggestions.append("🛠️ Enable in BIOS for better performance")
+                else:
+                    suggestions.append("✅ XMP/DOCP enabled")
+            
+            # Low RAM warning
+            if data['total'] < 8:
+                suggestions.append("📊 Total RAM: {:.1f}GB (consider upgrade)".format(data['total']))
+            
+            return suggestions
+            
+        except Exception as e:
+            print(f"[ERROR] RAM suggestions failed: {e}")
+            return []
 
+# Singleton instance
+_ram_monitor = None
+
+def get_ram_monitor() -> RAMMonitor:
+    """Get global RAM monitor instance"""
+    global _ram_monitor
+    if _ram_monitor is None:
+        _ram_monitor = RAMMonitor()
+    return _ram_monitor
 
 if __name__ == "__main__":
-    # Test RAM monitor
-    print("Testing RAM Monitor...\n")
+    # Test
+    print("[TEST] Testing RAMMonitor...")
     
     monitor = RAMMonitor()
     
     if monitor.is_available():
-        print("✅ RAM Monitoring Available\n")
+        print("[PASS] RAM monitor available")
         
+        # Get data
         data = monitor.get_data()
-        print("RAM Data:")
-        for key, value in data.items():
-            if isinstance(value, float):
-                print(f"  {key:15s}: {value:.2f}")
-            elif value is not None:
-                print(f"  {key:15s}: {value}")
-            else:
-                print(f"  {key:15s}: N/A")
+        print(f"[INFO] RAM Total: {data['total']:.1f} GB")
+        print(f"[INFO] RAM Used: {data['used']:.1f} GB")
+        print(f"[INFO] RAM Free: {data['free']:.1f} GB")
+        print(f"[INFO] RAM Usage: {data['percent']:.1f}%")
         
-        print("\n✅ RAM monitoring working!")
+        if data['speed']:
+            print(f"[INFO] RAM Speed: {data['speed']} MHz")
+            print(f"[INFO] RAM Type: {data['type']}")
+            print(f"[INFO] XMP Enabled: {data['xmp_enabled']}")
+        else:
+            print("[INFO] RAM Speed: Not available")
         
-        # Detailed info (Windows only)
-        if platform.system() == "Windows":
-            detailed = monitor.get_detailed_info()
-            if detailed['sticks']:
-                print("\n=== Detailed RAM Info ===")
-                for i, stick in enumerate(detailed['sticks'], 1):
-                    print(f"\nStick {i}:")
-                    for key, value in stick.items():
-                        print(f"  {key:15s}: {value}")
+        # Test caching
+        import time
+        start = time.time()
+        for i in range(10):
+            _ = monitor.get_data()
+        elapsed = time.time() - start
+        print(f"[PERF] 10 reads: {elapsed*1000:.2f}ms ({elapsed/10*1000:.2f}ms/read)")
         
-        if not data['speed']:
-            print("\n⚠️  Speed/XMP unavailable - requires WMI on Windows")
+        # Detailed info
+        info = monitor.get_detailed_info()
+        print(f"[INFO] Swap Total: {info.get('swap_total', 0):.1f} GB")
+        print(f"[INFO] Swap Used: {info.get('swap_used', 0):.1f} GB")
+        
+        # Suggestions
+        suggestions = monitor.get_optimization_suggestions()
+        if suggestions:
+            print("\n[SUGGESTIONS]")
+            for s in suggestions:
+                print(f"  {s}")
     else:
-        print("❌ psutil not available - cannot monitor RAM")
+        print("[FAIL] RAM monitor not available")
