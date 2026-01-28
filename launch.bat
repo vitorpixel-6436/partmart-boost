@@ -1,13 +1,14 @@
 @echo off
 chcp 65001 > nul
+title PartMart Boost Launcher
 color 0C
 echo.
 echo  ██████╗ ██████╗ ███████╗███████╗██╗   ██╗ ██████╗ ███████╗
- echo ██╔════╝██╔═══██╗██╔════╝╚══██╔══╝██║██╔╝ ██╔═══██╗██╔════╝
- echo ██║     ███████║███████╗   ██║   █████╔╝ ███████║███████╗
- echo ██║     ██╔══██║██╔═══╝    ██║   ██╔═██╗ ██╔══██║╚════██║
- echo ╚██████╗██║  ██║██║        ██║   ██║ ╚██╗██║  ██║███████║
- echo  ╚═════╝╚═╝  ╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
+echo  ██╔════╝██╔═══██╗██╔════╝╚══██╔══╝██║██╔╝ ██╔═══██╗██╔════╝
+echo  ██║     ███████║███████╗   ██║   █████╔╝ ███████║███████╗
+echo  ██║     ██╔══██║██╔═══╝    ██║   ██╔═██╗ ██╔══██║╚════██║
+echo  ╚██████╗██║  ██║██║        ██║   ██║ ╚██╗██║  ██║███████║
+echo  ╚═════╝╚═╝  ╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
 echo.
 echo         🐉 PartMart Boost v0.2-alpha Launcher
 echo         Твой ПК. Твоя мощь.
@@ -17,7 +18,7 @@ echo.
 
 REM Check Python
 echo  [✓] Проверка Python...
-python --version 2>nul
+python --version >nul 2>&1
 if errorlevel 1 (
     color 0C
     echo.
@@ -38,7 +39,7 @@ echo.
 
 REM Check dependencies
 echo  [✓] Проверка зависимостей...
-python -c "import PyQt6" 2>nul
+python -c "import PyQt6" >nul 2>&1
 if errorlevel 1 (
     echo  [→] Установка зависимостей...
     echo.
@@ -74,13 +75,14 @@ echo.
 
 REM Launch app
 python src/main.py
+set ERROR_CODE=%ERRORLEVEL%
 
-if errorlevel 1 (
+if %ERROR_CODE% neq 0 (
     color 0C
     echo.
     echo  ========================================================
     echo.
-    echo  [✗] ОШИБКА ЗАПУСКА!
+    echo  [✗] ОШИБКА ЗАПУСКА (Error code: %ERROR_CODE%)
     echo.
     echo  Проверьте логи выше и создайте issue на GitHub:
     echo  https://github.com/vitorpixel-6436/partmart-boost/issues
@@ -88,9 +90,11 @@ if errorlevel 1 (
     echo  ========================================================
     echo.
     pause
+    exit /b %ERROR_CODE%
 ) else (
     color 0A
     echo.
     echo  [✓] Приложение закрыто корректно
     timeout /t 2 /nobreak >nul
+    exit /b 0
 )
