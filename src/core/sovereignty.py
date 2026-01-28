@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Sovereignty Manager - Automatic fallback system for maximum autonomy.
+"""Sovereignty Manager - Automatic fallback system for maximum autonomy.
 
 Manages dependency fallbacks:
 - TIER 1 (FULL): External libraries (psutil, pynvml, wmi)
@@ -10,12 +9,14 @@ Manages dependency fallbacks:
 Goal: Application works even with ZERO external dependencies.
 
 Author: PartMart Team
-Version: 0.3.5-alpha
+Version: 0.3.5c_hotfix
 License: MIT
 """
 
 import platform
 from typing import Dict, Any, Literal
+
+# FIX: Import BaseMonitor directly
 from monitors import BaseMonitor
 
 
@@ -23,24 +24,16 @@ MonitoringLevel = Literal['FULL', 'NATIVE', 'MINIMAL']
 
 
 class SovereigntyManager:
-    """
-    Manages monitoring fallback hierarchy for maximum autonomy.
+    """Manages monitoring fallback hierarchy for maximum autonomy.
     
     Priority:
     1. FULL: psutil + pynvml + wmi (best features)
     2. NATIVE: Native OS APIs (good performance)
     3. MINIMAL: Stub monitors (safe defaults)
-    
-    Example:
-        >>> manager = SovereigntyManager()
-        >>> cpu_monitor = manager.get_cpu_monitor()
-        >>> data = cpu_monitor.get_data()
-        >>> print(manager.get_sovereignty_status())
     """
     
     def __init__(self, prefer_native: bool = False):
-        """
-        Initialize sovereignty manager.
+        """Initialize sovereignty manager.
         
         Args:
             prefer_native: If True, use native monitors even if
@@ -58,14 +51,7 @@ class SovereigntyManager:
         print(f"[Sovereignty] Score: {self.get_sovereignty_score()}/100")
     
     def _detect_monitoring_level(self) -> MonitoringLevel:
-        """
-        Detect available monitoring level.
-        
-        Returns:
-            'FULL': All external libraries available
-            'NATIVE': Native OS APIs available
-            'MINIMAL': Only stdlib available
-        """
+        """Detect available monitoring level."""
         # If user prefers native, use it
         if self.prefer_native:
             if self._test_native_apis():
@@ -97,12 +83,7 @@ class SovereigntyManager:
             return False
     
     def _test_native_apis(self) -> bool:
-        """
-        Test if native OS APIs are available.
-        
-        Returns:
-            True if WMIC (Windows), /proc (Linux), or sysctl (macOS) work
-        """
+        """Test if native OS APIs are available."""
         try:
             if self.platform == 'Windows':
                 # Test WMIC
@@ -140,79 +121,66 @@ class SovereigntyManager:
     # ========== Monitor Factory ==========
     
     def get_gpu_monitor(self) -> BaseMonitor:
-        """
-        Get GPU monitor based on availability.
-        
-        Returns:
-            GPUMonitor (pynvml) or FallbackGPUMonitor (native)
-        """
+        """Get GPU monitor based on availability."""
         if self.monitoring_level == 'FULL' and not self.prefer_native:
             try:
                 from monitors.gpu_monitor import GPUMonitor
                 return GPUMonitor()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Failed to load GPUMonitor: {e}")
         
         # Fallback to native
         try:
             from monitors.fallback_gpu import FallbackGPUMonitor
             return FallbackGPUMonitor()
-        except Exception:
-            return self._get_stub_monitor('GPU')
+        except Exception as e:
+            print(f"[WARN] Failed to load FallbackGPUMonitor: {e}")
+        
+        # Last resort: stub
+        return self._get_stub_monitor('GPU')
     
     def get_cpu_monitor(self) -> BaseMonitor:
-        """
-        Get CPU monitor based on availability.
-        
-        Returns:
-            CPUMonitor (psutil) or NativeCPUMonitor (native)
-        """
+        """Get CPU monitor based on availability."""
         if self.monitoring_level == 'FULL' and not self.prefer_native:
             try:
                 from monitors.cpu_monitor import CPUMonitor
                 return CPUMonitor()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Failed to load CPUMonitor: {e}")
         
         # Fallback to native
         if self.monitoring_level in ['FULL', 'NATIVE']:
             try:
                 from monitors.native_cpu import NativeCPUMonitor
                 return NativeCPUMonitor()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Failed to load NativeCPUMonitor: {e}")
         
         # Last resort: stub
         return self._get_stub_monitor('CPU')
     
     def get_ram_monitor(self) -> BaseMonitor:
-        """
-        Get RAM monitor based on availability.
-        
-        Returns:
-            RAMMonitor (psutil) or NativeRAMMonitor (native)
-        """
+        """Get RAM monitor based on availability."""
         if self.monitoring_level == 'FULL' and not self.prefer_native:
             try:
                 from monitors.ram_monitor import RAMMonitor
                 return RAMMonitor()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Failed to load RAMMonitor: {e}")
         
         # Fallback to native
         if self.monitoring_level in ['FULL', 'NATIVE']:
             try:
                 from monitors.native_ram import NativeRAMMonitor
                 return NativeRAMMonitor()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Failed to load NativeRAMMonitor: {e}")
         
         # Last resort: stub
         return self._get_stub_monitor('RAM')
     
     def _get_stub_monitor(self, monitor_type: str) -> BaseMonitor:
-        """
-        Get stub monitor that returns safe defaults.
+        """Get stub monitor that returns safe defaults.
         
         Args:
             monitor_type: 'GPU', 'CPU', or 'RAM'
@@ -222,7 +190,9 @@ class SovereigntyManager:
         """
         class StubMonitor(BaseMonitor):
             def __init__(self, mtype: str):
+                super().__init__()
                 self.mtype = mtype
+                self.available = False
             
             def get_name(self) -> str:
                 return f"Stub {self.mtype} Monitor"
@@ -272,21 +242,7 @@ class SovereigntyManager:
     # ========== Status & Metrics ==========
     
     def get_sovereignty_status(self) -> Dict[str, Any]:
-        """
-        Get current sovereignty status.
-        
-        Returns:
-            dict: {
-                'level': MonitoringLevel,
-                'score': int (0-100),
-                'gpu': str (monitor type),
-                'cpu': str (monitor type),
-                'ram': str (monitor type),
-                'external_deps': list,
-                'native_apis': bool,
-                'offline_capable': bool,
-            }
-        """
+        """Get current sovereignty status."""
         gpu_type = self._get_monitor_type('gpu')
         cpu_type = self._get_monitor_type('cpu')
         ram_type = self._get_monitor_type('ram')
@@ -329,15 +285,7 @@ class SovereigntyManager:
             return deps
     
     def get_sovereignty_score(self) -> int:
-        """
-        Calculate sovereignty score (0-100).
-        
-        100 = Complete autonomy (no external deps)
-        0 = Full external dependency
-        
-        Returns:
-            int: Sovereignty score
-        """
+        """Calculate sovereignty score (0-100)."""
         if self.monitoring_level == 'MINIMAL':
             return 100  # Pure stdlib!
         elif self.monitoring_level == 'NATIVE':
@@ -374,8 +322,6 @@ class SovereigntyManager:
         print("="*60)
         print()
 
-
-# ========== Testing ==========
 
 if __name__ == '__main__':
     print("="*60)

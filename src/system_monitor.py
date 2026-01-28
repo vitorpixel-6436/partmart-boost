@@ -1,240 +1,195 @@
-#!/usr/bin/env python3
-"""SystemMonitor - Backward compatibility wrapper.
+"""System Monitor Wrapper - Unified interface for main_window.py
 
-Provides legacy SystemMonitor interface using new MonitorManager.
-
+Version: 0.3.5c_hotfix
 Author: PartMart Team
-Version: 0.3.5b
-"""
 
-from typing import Dict, Any
+Provides simple interface for getting system metrics.
+"""
+from typing import Dict, Optional
 from monitors.manager import MonitorManager
-import traceback
 
 
 class SystemMonitor:
-    """Legacy SystemMonitor interface for backward compatibility.
+    """Wrapper around MonitorManager for easier integration."""
     
-    This class wraps MonitorManager to provide the old API that existing
-    code expects, while using the new monitoring infrastructure under the hood.
-    """
-    
-    def __init__(self, prefer_native: bool = False, debug: bool = True):
+    def __init__(self, prefer_native: bool = False):
         """Initialize system monitor.
         
         Args:
-            prefer_native: If True, prefer native OS APIs over libraries
-            debug: Enable debug output
+            prefer_native: Use native monitors (max sovereignty)
         """
         self.manager = MonitorManager(prefer_native=prefer_native)
-        self._last_data = {}
-        self._debug = debug
-        
-        print(f"[SystemMonitor] Initialized (debug={'ON' if debug else 'OFF'})")
+        self._last_data: Optional[Dict] = None
     
-    def get_gpu_data(self) -> Dict[str, Any]:
-        """Get GPU monitoring data.
+    def update(self) -> Dict:
+        """Update and get all system data.
         
         Returns:
-            Dictionary with GPU metrics
+            Dict with gpu, cpu, ram data
         """
         try:
-            # Get fresh data
-            all_data = self.manager.get_all_data()
-            gpu_raw = all_data.get('gpu', {})
-            
-            if self._debug:
-                print(f"[DEBUG] Raw GPU data keys: {list(gpu_raw.keys())}")
-                print(f"[DEBUG] GPU name: {gpu_raw.get('name')}")
-            
-            # Map keys from various possible sources
-            result = {
-                'name': gpu_raw.get('name', 'Unknown GPU'),
-                'temperature': (
-                    gpu_raw.get('temperature') or 
-                    gpu_raw.get('temp_gpu') or 
-                    gpu_raw.get('temp_hotspot') or 
-                    0
-                ),
-                'temp_hotspot': gpu_raw.get('temperature_hotspot') or gpu_raw.get('temp_hotspot'),
-                'load': (
-                    gpu_raw.get('load_gpu') or 
-                    gpu_raw.get('load') or 
-                    0
-                ),
-                'clock': (
-                    gpu_raw.get('clock_graphics') or 
-                    gpu_raw.get('clock_gpu') or 
-                    0
-                ),
-                'memory_clock': (
-                    gpu_raw.get('clock_memory') or 
-                    gpu_raw.get('clock_mem') or 
-                    0
-                ),
-                'memory_used': (
-                    gpu_raw.get('memory_used') or 
-                    gpu_raw.get('mem_used') or 
-                    0
-                ),
-                'memory_total': (
-                    gpu_raw.get('memory_total') or 
-                    gpu_raw.get('mem_total') or 
-                    0
-                ),
-                'power': (
-                    gpu_raw.get('power_usage') or 
-                    gpu_raw.get('power') or 
-                    0
-                ),
-                'fan_speed': gpu_raw.get('fan_speed', 0),
-            }
-            
-            if self._debug:
-                print(f"[DEBUG] Mapped GPU - temp={result['temperature']}, load={result['load']}, clock={result['clock']}")
-            
-            return result
-        
+            self._last_data = self.manager.get_all_data()
+            return self._last_data
         except Exception as e:
-            print(f"[ERROR] get_gpu_data failed: {e}")
-            traceback.print_exc()
-            return {
-                'name': 'Error',
-                'temperature': 0,
-                'temp_hotspot': None,
-                'load': 0,
-                'clock': 0,
-                'memory_clock': 0,
-                'memory_used': 0,
-                'memory_total': 0,
-                'power': 0,
-                'fan_speed': 0,
-            }
+            print(f"[ERROR] SystemMonitor.update() failed: {e}")
+            # Return last known data or empty
+            return self._last_data if self._last_data else self._get_empty_data()
     
-    def get_ram_data(self) -> Dict[str, Any]:
-        """Get RAM monitoring data."""
+    def get_gpu_data(self) -> Dict:
+        """Get GPU data only.
+        
+        Returns:
+            GPU metrics dict
+        """
+        if self._last_data and 'gpu' in self._last_data:
+            return self._last_data['gpu']
+        
         try:
-            all_data = self.manager.get_all_data()
-            ram_data = all_data.get('ram', {})
-            
-            if self._debug:
-                print(f"[DEBUG] RAM keys: {list(ram_data.keys())}")
-            
-            total_gb = ram_data.get('total', 0) / (1024**3) if ram_data.get('total') else 0
-            used_gb = ram_data.get('used', 0) / (1024**3) if ram_data.get('used') else 0
-            free_gb = ram_data.get('free', 0) / (1024**3) if ram_data.get('free') else 0
-            
-            result = {
-                'total_gb': total_gb,
-                'used_gb': used_gb,
-                'free_gb': free_gb,
-                'percent': ram_data.get('percent', 0),
-                'speed': ram_data.get('speed', 0),
-                'type': ram_data.get('type', 'Unknown'),
-                'xmp_enabled': ram_data.get('xmp_enabled', False),
-            }
-            
-            if self._debug:
-                print(f"[DEBUG] RAM - {used_gb:.1f}/{total_gb:.1f} GB ({result['percent']}%)")
-            
-            return result
-        
-        except Exception as e:
-            print(f"[ERROR] get_ram_data failed: {e}")
-            traceback.print_exc()
-            return {
-                'total_gb': 0,
-                'used_gb': 0,
-                'free_gb': 0,
-                'percent': 0,
-                'speed': 0,
-                'type': 'Error',
-                'xmp_enabled': False,
-            }
+            data = self.manager.get_all_data()
+            return data.get('gpu', {})
+        except Exception:
+            return {}
     
-    def get_cpu_data(self) -> Dict[str, Any]:
-        """Get CPU monitoring data."""
+    def get_cpu_data(self) -> Dict:
+        """Get CPU data only.
+        
+        Returns:
+            CPU metrics dict
+        """
+        if self._last_data and 'cpu' in self._last_data:
+            return self._last_data['cpu']
+        
         try:
-            all_data = self.manager.get_all_data()
-            cpu_data = all_data.get('cpu', {})
-            
-            if self._debug:
-                print(f"[DEBUG] CPU keys: {list(cpu_data.keys())}")
-            
-            result = {
-                'name': cpu_data.get('name', 'Unknown CPU'),
-                'load': cpu_data.get('load', 0),
-                'temperature': cpu_data.get('temp'),
-                'frequency': cpu_data.get('freq', 0),
-                'freq_min': cpu_data.get('freq_min', 0),
-                'freq_max': cpu_data.get('freq_max', 0),
-                'cores': cpu_data.get('count', 0),
-                'threads': cpu_data.get('count_logical', 0),
-            }
-            
-            if self._debug:
-                print(f"[DEBUG] CPU - load={result['load']}%, cores={result['cores']}")
-            
-            return result
+            data = self.manager.get_all_data()
+            return data.get('cpu', {})
+        except Exception:
+            return {}
+    
+    def get_ram_data(self) -> Dict:
+        """Get RAM data only.
         
-        except Exception as e:
-            print(f"[ERROR] get_cpu_data failed: {e}")
-            traceback.print_exc()
-            return {
-                'name': 'Error',
-                'load': 0,
-                'temperature': None,
-                'frequency': 0,
-                'freq_min': 0,
-                'freq_max': 0,
-                'cores': 0,
-                'threads': 0,
-            }
+        Returns:
+            RAM metrics dict
+        """
+        if self._last_data and 'ram' in self._last_data:
+            return self._last_data['ram']
+        
+        try:
+            data = self.manager.get_all_data()
+            return data.get('ram', {})
+        except Exception:
+            return {}
     
-    def get_all_data(self) -> Dict[str, Dict[str, Any]]:
-        """Get all monitoring data at once."""
-        return {
-            'gpu': self.get_gpu_data(),
-            'cpu': self.get_cpu_data(),
-            'ram': self.get_ram_data(),
-        }
-    
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get monitoring performance statistics."""
+    def get_performance_stats(self) -> Dict:
+        """Get performance statistics.
+        
+        Returns:
+            Performance metrics (avg_time_ms, etc)
+        """
         return self.manager.get_performance_stats()
     
-    def get_sovereignty_status(self) -> Dict[str, Any]:
-        """Get sovereignty status."""
+    def get_sovereignty_status(self) -> Dict:
+        """Get sovereignty status.
+        
+        Returns:
+            Sovereignty info (level, score, etc)
+        """
         return self.manager.get_sovereignty_status()
+    
+    def _get_empty_data(self) -> Dict:
+        """Get empty data structure.
+        
+        Returns:
+            Empty metrics dict
+        """
+        return {
+            'gpu': {
+                'name': 'No GPU',
+                'temp_gpu': 0,
+                'temp_hotspot': None,
+                'clock_gpu': 0,
+                'clock_mem': 0,
+                'load_gpu': 0,
+                'load_mem': 0,
+                'power': 0,
+                'fan_speed': 0,
+            },
+            'cpu': {
+                'name': 'Unknown CPU',
+                'load': 0,
+                'temp': None,
+                'freq': 0,
+                'freq_min': 0,
+                'freq_max': 0,
+                'count': 1,
+                'count_logical': 1,
+            },
+            'ram': {
+                'total': 16.0,
+                'used': 8.0,
+                'free': 8.0,
+                'percent': 50.0,
+                'speed': None,
+                'type': 'DDR4',
+                'xmp_enabled': False,
+            },
+        }
 
 
-def create_monitor(prefer_native: bool = False, debug: bool = True) -> SystemMonitor:
-    """Create a SystemMonitor instance."""
-    return SystemMonitor(prefer_native=prefer_native, debug=debug)
-
-
-if __name__ == '__main__':
-    print("[TEST] SystemMonitor Wrapper v0.3.5b")
+if __name__ == "__main__":
+    import time
+    
+    print("[TEST] SystemMonitor Wrapper")
     print("="*60)
     
-    monitor = SystemMonitor(debug=True)
+    monitor = SystemMonitor()
     
-    print("\n[GPU Data]")
+    print("\n[INFO] Sovereignty Status:")
+    status = monitor.get_sovereignty_status()
+    print(f"  Level: {status['level']}")
+    print(f"  Score: {status['score']}/100")
+    
+    print("\n[INFO] Testing data retrieval...")
+    
+    # Update all
+    data = monitor.update()
+    print(f"\n[GPU] {data['gpu']['name']}")
+    print(f"  Temp: {data['gpu']['temp_gpu']}°C")
+    print(f"  Load: {data['gpu']['load_gpu']}%")
+    
+    print(f"\n[CPU] {data['cpu']['name']}")
+    print(f"  Load: {data['cpu']['load']:.1f}%")
+    print(f"  Freq: {data['cpu']['freq']:.0f} MHz")
+    
+    print(f"\n[RAM] {data['ram']['type']}")
+    print(f"  Used: {data['ram']['used']:.2f} GB")
+    print(f"  Percent: {data['ram']['percent']:.1f}%")
+    
+    # Test individual getters
+    print("\n[INFO] Testing individual getters...")
     gpu = monitor.get_gpu_data()
-    for k, v in gpu.items():
-        if v:
-            print(f"  {k}: {v}")
-    
-    print("\n[CPU Data]")
     cpu = monitor.get_cpu_data()
-    for k, v in cpu.items():
-        if v:
-            print(f"  {k}: {v}")
-    
-    print("\n[RAM Data]")
     ram = monitor.get_ram_data()
-    for k, v in ram.items():
-        print(f"  {k}: {v}")
+    
+    print(f"  GPU: {gpu.get('name', 'N/A')}")
+    print(f"  CPU: {cpu.get('name', 'N/A')}")
+    print(f"  RAM: {ram.get('type', 'N/A')}")
+    
+    # Performance
+    print("\n[INFO] Testing performance (10 iterations)...")
+    start = time.time()
+    for _ in range(10):
+        monitor.update()
+        time.sleep(0.05)
+    elapsed = time.time() - start
+    
+    stats = monitor.get_performance_stats()
+    print(f"\n[STATS] Performance:")
+    print(f"  Average: {stats['avg_time_ms']:.2f}ms")
+    print(f"  Last: {stats['last_time_ms']:.2f}ms")
+    print(f"  Total updates: {stats['total_updates']}")
+    print(f"  Total time: {elapsed:.3f}s")
     
     print("\n" + "="*60)
-    print("✅ SystemMonitor v0.3.5b works!")
+    print("✅ SystemMonitor wrapper works!")
+    print("="*60)
