@@ -1,9 +1,10 @@
+"""PartMart Boost main window with full localization and ML integration"""
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QStackedWidget, QApplication, QProgressBar, QGridLayout, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont, QPalette, QColor
+from PyQt6.QtGui import QFont
 import sys
 import os
 import subprocess
@@ -12,9 +13,28 @@ import psutil
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Core imports
+from localization import t, set_language, init_localization
+from core.config import get_config, init_config
+from core.logger import get_logger, init_logger
+
+# UI imports
+try:
+    from ui.settings_dialog import SettingsDialog
+except ImportError:
+    SettingsDialog = None
+
+# System imports
 from ui.ai_widget import PartMartAIWidget
 from ai_optimizer import PartMartAIOptimizer
 from system_monitor import SystemMonitor
+
+# ML imports (optional)
+try:
+    from optimizers.ml_optimizer import get_ml_optimizer, init_ml_optimizer
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
 
 class MetricCard(QFrame):
     """Standalone metric card with guaranteed text visibility"""
@@ -66,7 +86,7 @@ class MetricCard(QFrame):
         layout.addWidget(self.value_label)
         
         # Subtitle - VISIBLE
-        self.subtitle_label = QLabel("Loading...")
+        self.subtitle_label = QLabel(t('loading'))
         self.subtitle_label.setStyleSheet("""
             QLabel {
                 font-size: 12px;
@@ -102,6 +122,10 @@ class MetricCard(QFrame):
         
         self.setLayout(layout)
     
+    def set_title(self, title: str):
+        self.title_label.setText(title)
+        self.title_label.repaint()
+    
     def set_value(self, value: str):
         self.value_label.setText(value)
         self.value_label.repaint()
@@ -117,11 +141,31 @@ class MetricCard(QFrame):
         self.progress.repaint()
 
 class PartMartMainWindow(QMainWindow):
-    """Modern card-based UI with PartMart red branding"""
+    """Modern card-based UI with full localization and ML integration"""
 
-    def __init__(self):
+    def __init__(self, version: str = "0.3.4-alpha"):
         super().__init__()
-        self.setWindowTitle("🐉 PartMart Boost v0.3.2-alpha")
+        self.version = version
+        
+        # Initialize core systems
+        self.config = init_config()
+        self.logger = init_logger(log_level=self.config.get("log_level", "INFO"))
+        
+        # Initialize localization
+        lang = self.config.get_language()
+        init_localization(lang)
+        
+        # Log startup
+        self.logger.log_startup(version)
+        
+        # Initialize ML optimizer (if enabled)
+        if ML_AVAILABLE:
+            self.ml_optimizer = init_ml_optimizer(self.config.is_ml_enabled())
+        else:
+            self.ml_optimizer = None
+        
+        # Window setup
+        self.setWindowTitle(t('window_title', version=version))
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 700)
         
@@ -135,13 +179,19 @@ class PartMartMainWindow(QMainWindow):
         self.ram_card = None
         self.cpu_card = None
         
+        # Last state for ML
+        self.last_state = None
+        
         self._setup_ui()
         
         # Auto-update timer
+        interval = self.config.get_update_interval()
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._update_system_data)
-        self.update_timer.start(2000)
+        self.update_timer.start(interval)
         self._update_system_data()
+        
+        self.logger.info("Application initialized successfully")
 
     def _setup_ui(self):
         # Main stylesheet
@@ -173,7 +223,7 @@ class PartMartMainWindow(QMainWindow):
         
         self.page_home = self._create_home_page()
         self.page_gpu = self._create_gpu_page()
-        self.page_ram = self._create_placeholder("RAM TUNER")
+        self.page_ram = self._create_placeholder(t('coming_soon'))
         
         for page in [self.page_home, self.page_gpu, self.page_ram]:
             self.content_stack.addWidget(page)
@@ -210,9 +260,9 @@ class PartMartMainWindow(QMainWindow):
         
         # Navigation tabs
         tabs = [
-            ("🏠 Главная", 0),
-            ("🎮 GPU", 1),
-            ("🧠 RAM", 2),
+            ("🏠 " + t('nav_home'), 0),
+            ("🎮 " + t('nav_gpu'), 1),
+            ("🧠 " + t('nav_ram'), 2),
         ]
         
         for text, index in tabs:
@@ -224,6 +274,28 @@ class PartMartMainWindow(QMainWindow):
             btn.clicked.connect(lambda checked, i=index: self._switch_page(i))
             layout.addWidget(btn)
             self.nav_buttons.append(btn)
+        
+        # Settings button
+        if SettingsDialog:
+            settings_btn = QPushButton("⚙️")
+            settings_btn.setFixedSize(48, 48)
+            settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            settings_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    color: #A0A0A0;
+                    border: 2px solid #252525;
+                    border-radius: 12px;
+                    font-size: 20px;
+                }
+                QPushButton:hover {
+                    background: #1A1A1A;
+                    color: #E63946;
+                    border-color: #E63946;
+                }
+            """)
+            settings_btn.clicked.connect(self._open_settings)
+            layout.addWidget(settings_btn)
         
         header.setLayout(layout)
         return header
@@ -267,6 +339,31 @@ class PartMartMainWindow(QMainWindow):
             btn.setStyleSheet(self._get_tab_style(i == index))
         self.content_stack.setCurrentIndex(index)
 
+    def _open_settings(self):
+        """Open settings dialog"""
+        if not SettingsDialog:
+            return
+        
+        dialog = SettingsDialog(self)
+        dialog.settings_changed.connect(self._on_settings_changed)
+        dialog.exec()
+    
+    def _on_settings_changed(self):
+        """Handle settings changes"""
+        # Update update interval
+        new_interval = self.config.get_update_interval()
+        self.update_timer.setInterval(new_interval)
+        self.logger.info(f"Update interval changed to {new_interval}ms")
+        
+        # Reinitialize ML optimizer if enabled/disabled
+        if ML_AVAILABLE:
+            ml_enabled = self.config.is_ml_enabled()
+            if self.ml_optimizer:
+                self.ml_optimizer.enabled = ml_enabled
+            else:
+                self.ml_optimizer = init_ml_optimizer(ml_enabled)
+            self.logger.info(f"ML optimizer {'enabled' if ml_enabled else 'disabled'}")
+
     def _create_home_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout()
@@ -278,9 +375,9 @@ class PartMartMainWindow(QMainWindow):
         grid.setSpacing(20)
         
         # Create metric cards
-        self.gpu_card = MetricCard("🌡️ GPU Temperature")
-        self.ram_card = MetricCard("🧠 RAM Usage")
-        self.cpu_card = MetricCard("💻 CPU Load")
+        self.gpu_card = MetricCard(t('metric_gpu_temp'))
+        self.ram_card = MetricCard(t('metric_ram_usage'))
+        self.cpu_card = MetricCard(t('metric_cpu_load'))
         
         grid.addWidget(self.gpu_card, 0, 0)
         grid.addWidget(self.ram_card, 0, 1)
@@ -292,8 +389,13 @@ class PartMartMainWindow(QMainWindow):
         info_card = self._create_system_info_card()
         layout.addWidget(info_card)
         
+        # ML Recommendations (if enabled)
+        if self.ml_optimizer and self.ml_optimizer.enabled:
+            ml_card = self._create_ml_recommendations_card()
+            layout.addWidget(ml_card)
+        
         # Quick Boost button
-        boost_btn = QPushButton("⚡ БЫСТРЫЙ БУСТ")
+        boost_btn = QPushButton("⚡ " + t('quick_boost'))
         boost_btn.setFixedHeight(60)
         boost_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         boost_btn.setStyleSheet("""
@@ -318,8 +420,16 @@ class PartMartMainWindow(QMainWindow):
         actions = QHBoxLayout()
         actions.setSpacing(20)
         
-        gpu_action = self._create_action_card("🎮 GPU Control", "Оптимизация видеокарты", lambda: self._switch_page(1))
-        ram_action = self._create_action_card("🧠 RAM Tuner", "XMP и очистка памяти", lambda: self._switch_page(2))
+        gpu_action = self._create_action_card(
+            t('action_gpu_control'),
+            t('action_gpu_desc'),
+            lambda: self._switch_page(1)
+        )
+        ram_action = self._create_action_card(
+            t('action_ram_tuner'),
+            t('action_ram_desc'),
+            lambda: self._switch_page(2)
+        )
         
         actions.addWidget(gpu_action)
         actions.addWidget(ram_action)
@@ -345,7 +455,7 @@ class PartMartMainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         
-        title = QLabel("📊 СИСТЕМНЫЕ ПОКАЗАТЕЛИ")
+        title = QLabel("📊 " + t('system_info_title'))
         title.setStyleSheet("""
             QLabel {
                 font-size: 18px;
@@ -359,7 +469,7 @@ class PartMartMainWindow(QMainWindow):
         info = QHBoxLayout()
         info.setSpacing(32)
         
-        self.gpu_info_label = QLabel("GPU: Loading...")
+        self.gpu_info_label = QLabel(t('loading'))
         self.gpu_info_label.setStyleSheet("""
             QLabel {
                 font-size: 13px;
@@ -369,7 +479,7 @@ class PartMartMainWindow(QMainWindow):
         """)
         info.addWidget(self.gpu_info_label)
         
-        self.cpu_info_label = QLabel("CPU: Loading...")
+        self.cpu_info_label = QLabel(t('loading'))
         self.cpu_info_label.setStyleSheet("""
             QLabel {
                 font-size: 13px;
@@ -381,6 +491,47 @@ class PartMartMainWindow(QMainWindow):
         
         layout.addLayout(info)
         layout.addStretch()
+        
+        card.setLayout(layout)
+        return card
+    
+    def _create_ml_recommendations_card(self) -> QFrame:
+        """Create ML recommendations card (shown only if ML enabled)"""
+        card = QFrame()
+        card.setFixedHeight(100)
+        card.setAutoFillBackground(True)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #1A1A1A;
+                border-left: 4px solid #FFA500;
+                border-radius: 16px;
+            }
+        """)
+        
+        layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        title = QLabel("🤖 " + t('ml_optimizer'))
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: 600;
+                color: #FFA500;
+                background: transparent;
+            }
+        """)
+        layout.addWidget(title)
+        
+        self.ml_recommendations_label = QLabel(t('ai_learning'))
+        self.ml_recommendations_label.setWordWrap(True)
+        self.ml_recommendations_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #A0A0A0;
+                background: transparent;
+            }
+        """)
+        layout.addWidget(self.ml_recommendations_label)
         
         card.setLayout(layout)
         return card
@@ -444,47 +595,84 @@ class PartMartMainWindow(QMainWindow):
         return card
 
     def _quick_boost(self):
-        """Quick system optimization"""
+        """Quick system optimization with ML tracking"""
         reply = QMessageBox.question(
             self,
-            'Быстрый буст',
-            'Оптимизировать систему?\n\nБудет выполнено:\n• Очистка RAM\n• Оптимизация приоритетов процессов',
+            t('quick_boost_title'),
+            t('quick_boost_msg'),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
+            # Record state before optimization
+            before_state = self._get_current_state()
+            
             try:
-                # Clear RAM (Windows)
-                if sys.platform == 'win32':
-                    # Empty working sets
-                    subprocess.run(['powershell', '-Command', 'Clear-RecycleBin -Force'], 
-                                   capture_output=True, timeout=5)
-                
                 # Optimize process priorities
                 current_process = psutil.Process()
                 try:
-                    current_process.nice(psutil.HIGH_PRIORITY_CLASS if sys.platform == 'win32' else -10)
+                    if sys.platform == 'win32':
+                        current_process.nice(psutil.HIGH_PRIORITY_CLASS)
+                    else:
+                        current_process.nice(-10)
                 except:
                     pass
                 
+                # Log optimization
+                self.logger.log_optimization("quick_boost", True, "Process priority optimized")
+                
+                # Record state after optimization
+                after_state = self._get_current_state()
+                
+                # Train ML model (if enabled)
+                if self.ml_optimizer and self.ml_optimizer.enabled:
+                    self.ml_optimizer.record_optimization(
+                        before_state,
+                        after_state,
+                        success=True
+                    )
+                
                 QMessageBox.information(
                     self,
-                    'Готово!',
-                    '✅ Оптимизация завершена!\n\nПроверьте изменения в метриках.'
+                    t('success'),
+                    t('quick_boost_success')
                 )
             except Exception as e:
+                self.logger.log_error_with_trace("Quick boost failed", e)
+                
+                # Record failed optimization
+                if self.ml_optimizer and self.ml_optimizer.enabled:
+                    self.ml_optimizer.record_optimization(
+                        before_state,
+                        {},
+                        success=False
+                    )
+                
                 QMessageBox.warning(
                     self,
-                    'Ошибка',
-                    f'Не удалось выполнить оптимизацию:\n{str(e)}'
+                    t('error'),
+                    t('quick_boost_error', error=str(e))
                 )
+    
+    def _get_current_state(self) -> dict:
+        """Get current system state for ML"""
+        try:
+            data = self.system_monitor.get_all_data()
+            return {
+                'gpu_temp': data['gpu']['temp_hotspot'] or data['gpu']['temp_gpu'],
+                'gpu_load': data['gpu']['load_gpu'],
+                'cpu_load': data['cpu']['load'],
+                'ram_percent': data['ram']['percent'],
+            }
+        except:
+            return {}
 
     def _create_gpu_page(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(40, 32, 40, 32)
         
-        title = QLabel("⚡ GPU CONTROL")
+        title = QLabel("⚡ " + t('gpu_control_title'))
         title.setStyleSheet("font-size: 32px; font-weight: 700; color: #E63946;")
         layout.addWidget(title)
         
@@ -503,7 +691,7 @@ class PartMartMainWindow(QMainWindow):
         
         info_layout = QVBoxLayout()
         
-        self.gpu_detail_label = QLabel("Loading GPU info...")
+        self.gpu_detail_label = QLabel(t('gpu_loading'))
         self.gpu_detail_label.setStyleSheet("""
             QLabel {
                 font-size: 16px;
@@ -545,7 +733,7 @@ class PartMartMainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        label = QLabel(f"🚧 {name}\n\nComing Soon")
+        label = QLabel(f"🚧 {name}")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("""
             font-size: 32px;
@@ -570,30 +758,54 @@ class PartMartMainWindow(QMainWindow):
                 self.gpu_card.set_value(f"{temp}°C")
                 gpu_name_short = gpu['name'][:20] + "..." if len(gpu['name']) > 20 else gpu['name']
                 self.gpu_card.set_subtitle(gpu_name_short)
-                self.gpu_card.set_progress(int(gpu['load_gpu']), f"Load: {int(gpu['load_gpu'])}%")
+                self.gpu_card.set_progress(int(gpu['load_gpu']), t('load_progress', value=int(gpu['load_gpu'])))
             
             # Update RAM card
             if self.ram_card:
-                self.ram_card.set_value(f"{ram['used']:.1f}GB")
-                self.ram_card.set_subtitle(f"{ram['total']:.0f}GB total | {ram['speed']}MHz")
-                self.ram_card.set_progress(int(ram['percent']), f"{int(ram['percent'])}%")
+                self.ram_card.set_value(f"{ram['used']:.1f}{t('unit_gb')}")
+                self.ram_card.set_subtitle(f"{ram['total']:.0f}{t('unit_gb')} total | {ram['speed']}{t('unit_mhz')}")
+                self.ram_card.set_progress(int(ram['percent']), f"{int(ram['percent'])}{t('unit_percent')}")
             
             # Update CPU card
             if self.cpu_card:
-                self.cpu_card.set_value(f"{cpu['load']:.0f}%")
+                self.cpu_card.set_value(f"{cpu['load']:.0f}{t('unit_percent')}")
                 if cpu['temp']:
-                    self.cpu_card.set_subtitle(f"Temp: {cpu['temp']:.0f}°C | {cpu['count']} cores")
+                    self.cpu_card.set_subtitle(t('cpu_temp', temp=cpu['temp']) + f" | {cpu['count']} cores")
                 else:
-                    self.cpu_card.set_subtitle(f"{cpu['count']} cores | {cpu['freq']:.0f}MHz")
-                self.cpu_card.set_progress(int(cpu['load']), f"Load: {int(cpu['load'])}%")
+                    self.cpu_card.set_subtitle(t('cpu_cores', count=cpu['count']) + f" | {cpu['freq']:.0f}{t('unit_mhz')}")
+                self.cpu_card.set_progress(int(cpu['load']), t('load_progress', value=int(cpu['load'])))
             
-            # System info card - FORCE REPAINT
+            # System info card
             if hasattr(self, 'gpu_info_label'):
-                self.gpu_info_label.setText(f"GPU: {gpu['name'][:20]}... | {gpu['clock_gpu']}MHz | {temp}°C | Load {gpu['load_gpu']:.0f}%")
+                self.gpu_info_label.setText(t('gpu_info', 
+                    name=gpu['name'][:20] + "...",
+                    clock=gpu['clock_gpu'],
+                    temp=temp,
+                    load=gpu['load_gpu']
+                ))
                 self.gpu_info_label.repaint()
             if hasattr(self, 'cpu_info_label'):
-                self.cpu_info_label.setText(f"CPU: {cpu['count']} cores | Load {cpu['load']:.0f}% | {cpu['freq']:.0f}MHz")
+                self.cpu_info_label.setText(t('cpu_info',
+                    cores=cpu['count'],
+                    load=cpu['load'],
+                    freq=cpu['freq']
+                ))
                 self.cpu_info_label.repaint()
+            
+            # ML Recommendations (if enabled)
+            if self.ml_optimizer and self.ml_optimizer.enabled and hasattr(self, 'ml_recommendations_label'):
+                current_state = {
+                    'gpu_temp': temp,
+                    'gpu_load': gpu['load_gpu'],
+                    'cpu_load': cpu['load'],
+                    'ram_percent': ram['percent'],
+                }
+                recommendations = self.ml_optimizer.get_recommendations(current_state)
+                if recommendations:
+                    self.ml_recommendations_label.setText("\n".join(recommendations[:2]))  # Show top 2
+                else:
+                    self.ml_recommendations_label.setText(t('ai_learning'))
+                self.ml_recommendations_label.repaint()
             
             # GPU page
             if hasattr(self, 'gpu_detail_label'):
@@ -609,11 +821,10 @@ class PartMartMainWindow(QMainWindow):
                 self.gpu_detail_load.repaint()
                 
         except Exception as e:
-            print(f"Error updating UI: {e}")
-            import traceback
-            traceback.print_exc()
+            self.logger.error(f"Error updating UI: {e}")
 
     def closeEvent(self, event):
+        self.logger.log_shutdown()
         self.update_timer.stop()
         self.system_monitor.cleanup()
         event.accept()
