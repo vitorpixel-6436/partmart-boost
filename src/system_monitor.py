@@ -111,7 +111,10 @@ class SystemMonitor:
         """Get CPU load and temperature"""
         cpu_load = psutil.cpu_percent(interval=0.1)
         cpu_freq = psutil.cpu_freq()
-        cpu_count = psutil.cpu_count(logical=True)
+        
+        # Physical cores count (not threads)
+        cpu_count_physical = psutil.cpu_count(logical=False)
+        cpu_count_logical = psutil.cpu_count(logical=True)
         
         # Temperature (platform dependent)
         cpu_temp = None
@@ -143,7 +146,8 @@ class SystemMonitor:
             "load": cpu_load,
             "temp": cpu_temp,
             "freq": cpu_freq.current if cpu_freq else 0,
-            "count": cpu_count,
+            "count": cpu_count_physical if cpu_count_physical else cpu_count_logical,  # Physical cores
+            "count_logical": cpu_count_logical,  # Threads
         }
     
     def get_ram_data(self) -> Dict:
