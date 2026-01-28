@@ -1,108 +1,93 @@
 @echo off
 chcp 65001 >nul
-setlocal EnableDelayedExpansion
+REM PartMart Boost Launcher for Windows
+REM Version: 0.3.5d
+
+title PartMart Boost Launcher
 
 echo ========================================================
 echo.
-echo           PartMart Boost Launcher
-echo           Your PC. Your Power.
+echo     🚀 PARTMART BOOST LAUNCHER
+echo     Version: 0.3.5d
 echo.
 echo ========================================================
 echo.
 
-REM Check Python installation
-echo [*] Checking Python...
+REM Check Python
 python --version >nul 2>&1
-if errorlevel 1 (
+if %errorlevel% neq 0 (
     echo [X] Python not found!
     echo.
-    echo Please install Python 3.11 or 3.12 from python.org
+    echo Please install Python 3.8+ from:
     echo https://www.python.org/downloads/
+    echo.
     pause
     exit /b 1
 )
 
-REM Get Python version
-for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
-echo [+] Python !PYTHON_VERSION! detected
-
-REM Check if version is 3.14 (not recommended)
-echo !PYTHON_VERSION! | findstr "3.14" >nul
-if not errorlevel 1 (
-    echo.
-    echo [!] WARNING: Python 3.14 has compatibility issues with PyQt6
-    echo [!] Recommended: Python 3.11 or 3.12
-    echo.
-    echo Continue anyway? Press Ctrl+C to cancel, or
-    pause
-)
-
+echo [+] Python found
 echo.
-echo [*] Setting up virtual environment...
 
-REM Check if venv exists
+REM Install dependencies if needed
 if not exist "venv" (
     echo [*] Creating virtual environment...
     python -m venv venv
-    if errorlevel 1 (
-        echo [X] Failed to create venv
-        pause
-        exit /b 1
-    )
-    echo [+] Virtual environment created
-) else (
-    echo [+] Virtual environment found
+    echo.
 )
 
-echo.
-echo [*] Activating venv...
+echo [*] Activating virtual environment...
 call venv\Scripts\activate.bat
-if errorlevel 1 (
-    echo [X] Failed to activate venv
-    pause
-    exit /b 1
-)
-
-echo [+] Venv activated
 echo.
-echo [*] Checking dependencies...
 
-REM Check if requirements are installed
-python -c "import PyQt6" >nul 2>&1
-if errorlevel 1 (
-    echo [*] Installing dependencies...
-    pip install -r requirements.txt
-    if errorlevel 1 (
-        echo [X] Failed to install dependencies
-        pause
-        exit /b 1
-    )
-    echo [+] Dependencies installed
+echo [*] Installing/updating dependencies...
+pip install -q -r requirements.txt
+if %errorlevel% neq 0 (
+    echo [!] Some dependencies failed, but continuing...
+)
+echo [+] Dependencies ready
+echo.
+
+echo ========================================================
+echo.
+echo Select mode:
+echo.
+echo   1. CLI Mode (Recommended for testing)
+echo   2. GUI Mode (Requires PyQt6)
+echo   3. Run Full Test Suite
+echo   4. Exit
+echo.
+echo ========================================================
+echo.
+
+set /p mode="Enter choice (1-4): "
+
+if "%mode%"=="1" (
+    echo.
+    echo [*] Launching CLI mode...
+    echo.
+    python src\main_cli.py
+) else if "%mode%"=="2" (
+    echo.
+    echo [*] Launching GUI mode...
+    echo.
+    python src\main.py
+) else if "%mode%"=="3" (
+    echo.
+    echo [*] Running full test suite...
+    echo.
+    python tests\test_all_modules.py
+) else if "%mode%"=="4" (
+    echo.
+    echo Goodbye!
+    goto :end
 ) else (
-    echo [+] Dependencies already installed
+    echo.
+    echo [X] Invalid choice
 )
 
 echo.
 echo ========================================================
 echo.
-echo [*] Launching PartMart Boost...
-echo.
-echo ========================================================
-echo.
 
-python src/main.py
-
-if errorlevel 1 (
-    echo.
-    echo ========================================================
-    echo.
-    echo [X] LAUNCH ERROR
-    echo.
-    echo Check logs above and create issue on GitHub:
-    echo https://github.com/vitorpixel-6436/partmart-boost/issues
-    echo.
-    echo ========================================================
-    echo.
-)
-
+:end
 pause
