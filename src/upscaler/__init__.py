@@ -1,45 +1,24 @@
 #!/usr/bin/env python3
-"""Upscaler Package
+"""Universal Hybrid Upscaler System
 
-Version: 0.3.5d_package3.3c
+Version: 0.4.0-alpha
 
-Upscaling implementations for PartMart Boost.
-
-Components:
-- interfaces: Abstract upscaler interface
-- fsr4_upscaler: AMD FSR 4 Super Resolution implementation
-
-Example:
-    >>> from upscaler import FSR4Upscaler, UpscaleQuality
-    >>> 
-    >>> upscaler = FSR4Upscaler()
-    >>> upscaler.initialize(display_width=1920, display_height=1080)
-    >>> upscaler.set_quality(UpscaleQuality.QUALITY)
-    >>> 
-    >>> upscaled = upscaler.upscale(low_res_frame)
+Multi-backend upscaling with FSR 3.1, XeSS 2.1, and software fallback.
 """
 
-from .interfaces import (
-    IUpscaler,
-    UpscaleQuality,
-    UpscaleCapabilities,
-    UpscaleStats,
-    UpscaleException,
-    UpscaleNotAvailableException,
-)
+from .core import UniversalUpscaler, UpscalerContext
+from .types import QualityMode, UpscalerBackend, UpscalerStatus
+from .exceptions import UpscalerException
 
-from .fsr4_upscaler import FSR4Upscaler
-
-__version__ = "0.3.5d_package3.3c"
+__version__ = "0.4.0-alpha"
 __all__ = [
-    # Interfaces
-    'IUpscaler',
-    'UpscaleQuality',
-    'UpscaleCapabilities',
-    'UpscaleStats',
-    # Implementations
-    'FSR4Upscaler',
-    # Exceptions
-    'UpscaleException',
-    'UpscaleNotAvailableException',
+    'UniversalUpscaler',
+    'UpscalerContext',
+    'QualityMode',
+    'UpscalerBackend',
+    'UpscalerStatus',
+    'UpscalerException',
 ]
+
+print("[Upscaler] Universal Hybrid Upscaler System loaded (v0.4.0-alpha)")
+print("[Upscaler] Backends: FSR 3.1 | XeSS 2.1 | Software Fallback")
