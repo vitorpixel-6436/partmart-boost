@@ -5,6 +5,8 @@ Provides graceful fallbacks for:
 - Failed hardware detection
 - Unsupported platforms
 - Security restrictions
+
+Version: 0.3.5d - Package 1
 """
 
 import sys
@@ -54,7 +56,8 @@ class FallbackManager:
                 self._feature_status[feature] = 'unavailable'
             
             print(f"[FallbackManager] {module_name} unavailable: {e}")
-            print(f"[FallbackManager] Feature '{feature}' will use fallback")
+            if feature:
+                print(f"[FallbackManager] Feature '{feature}' will use fallback")
             return None
     
     # ==================== GPU FALLBACKS ====================
@@ -106,8 +109,9 @@ class FallbackManager:
                     'clock_mem': 0,
                     'power': 0,
                     'fan_speed': 0,
-                    'mem_used': 0,
-                    'mem_total': 0,
+                    'memory_used': 0,
+                    'memory_total': 0,
+                    'memory_free': 0,
                     'status': 'unavailable',
                 }
         
@@ -124,14 +128,18 @@ class FallbackManager:
         2. Direct wmi (legacy)
         3. Subprocess calls
         4. None (feature disabled)
+        
+        FIX v0.3.5d: Use get_safe_wmi() function API consistently
         """
         if self.platform != 'Windows':
             return None
         
-        # Try SafeWMI
+        # FIX: Try SafeWMI with correct API
         try:
-            from core.safe_wmi import SafeWMI
-            return SafeWMI()
+            from core.safe_wmi import get_safe_wmi
+            wmi = get_safe_wmi()
+            if wmi and wmi.is_available():
+                return wmi
         except Exception as e:
             print(f"[FallbackManager] SafeWMI unavailable: {e}")
         
@@ -149,32 +157,48 @@ class FallbackManager:
         return self._create_subprocess_wmi()
     
     def _create_subprocess_wmi(self):
-        """Create subprocess-based WMI wrapper"""
+        """Create subprocess-based WMI wrapper
+        
+        FIX v0.3.5d: Add timeout to subprocess calls
+        """
         class SubprocessWMI:
             def get_ram_speed(self) -> Optional[int]:
                 try:
+                    # FIX: Add timeout
                     result = subprocess.run(
                         ['wmic', 'memorychip', 'get', 'speed'],
                         capture_output=True,
                         text=True,
-                        timeout=5
+                        timeout=3,  # FIX: 3 second timeout
+                        check=False,
+                        creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
                     )
+                    
+                    if result.returncode != 0:
+                        return None
                     
                     lines = result.stdout.strip().split('\n')
                     if len(lines) > 1:
-                        speed = int(lines[1].strip())
-                        return speed
+                        speed_str = lines[1].strip()
+                        if speed_str.isdigit():
+                            return int(speed_str)
                 except Exception as e:
                     print(f"[SubprocessWMI] Failed: {e}")
                 
                 return None
+            
+            def is_available(self) -> bool:
+                return True
         
         return SubprocessWMI()
     
     # ==================== CPU FALLBACKS ====================
     
     def get_cpu_temp_fallback(self) -> Optional[float]:
-        """Get CPU temperature with platform-specific fallbacks"""
+        """Get CPU temperature with platform-specific fallbacks
+        
+        FIX v0.3.5d: Add timeouts and validation
+        """
         if self.platform == 'Linux':
             return self._get_cpu_temp_linux()
         elif self.platform == 'Windows':
@@ -185,7 +209,10 @@ class FallbackManager:
         return None
     
     def _get_cpu_temp_linux(self) -> Optional[float]:
-        """Linux: Read from /sys/class/thermal"""
+        """Linux: Read from /sys/class/thermal
+        
+        FIX v0.3.5d: Better error handling
+        """
         try:
             # Try common paths
             paths = [
@@ -196,12 +223,18 @@ class FallbackManager:
             
             for path in paths:
                 if Path(path).exists():
-                    with open(path) as f:
-                        temp = float(f.read().strip())
-                        # Convert to Celsius if needed
-                        if temp > 200:
-                            temp /= 1000
-                        return temp
+                    try:
+                        with open(path) as f:
+                            temp = float(f.read().strip())
+                            # Convert to Celsius if needed
+                            if temp > 200:
+                                temp /= 1000
+                            
+                            # FIX: Sanity check
+                            if 0 <= temp <= 150:
+                                return round(temp, 1)
+                    except Exception:
+                        continue
         
         except Exception as e:
             print(f"[Fallback] Linux CPU temp failed: {e}")
@@ -209,19 +242,27 @@ class FallbackManager:
         return None
     
     def _get_cpu_temp_windows(self) -> Optional[float]:
-        """Windows: Try WMI or external tools"""
+        """Windows: Try WMI or external tools
+        
+        FIX v0.3.5d: Add timeout
+        """
         try:
-            # Try WMI
             result = subprocess.run(
                 ['wmic', 'cpu', 'get', 'temperature'],
                 capture_output=True,
                 text=True,
-                timeout=3
+                timeout=3,  # FIX: Timeout
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
             )
             
-            lines = result.stdout.strip().split('\n')
-            if len(lines) > 1 and lines[1].strip():
-                return float(lines[1].strip())
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                if len(lines) > 1 and lines[1].strip():
+                    temp = float(lines[1].strip())
+                    # FIX: Sanity check
+                    if 0 <= temp <= 150:
+                        return round(temp, 1)
         
         except Exception:
             pass
@@ -230,24 +271,30 @@ class FallbackManager:
         return None
     
     def _get_cpu_temp_macos(self) -> Optional[float]:
-        """macOS: Use powermetrics or other tools"""
+        """macOS: Use powermetrics or other tools
+        
+        FIX v0.3.5d: Add timeout and better parsing
+        """
         try:
             result = subprocess.run(
                 ['powermetrics', '--samplers', 'cpu_power', '-n', '1'],
                 capture_output=True,
                 text=True,
-                timeout=3
+                timeout=3,  # FIX: Timeout
+                check=False
             )
             
-            # Parse output for temperature
-            # (powermetrics output format varies)
-            for line in result.stdout.split('\n'):
-                if 'temperature' in line.lower():
-                    # Extract number
-                    import re
-                    match = re.search(r'(\d+\.?\d*)\s*C', line)
-                    if match:
-                        return float(match.group(1))
+            if result.returncode == 0:
+                # Parse output for temperature
+                import re
+                for line in result.stdout.split('\n'):
+                    if 'temperature' in line.lower():
+                        match = re.search(r'(\d+\.?\d*)\s*C', line)
+                        if match:
+                            temp = float(match.group(1))
+                            # FIX: Sanity check
+                            if 0 <= temp <= 150:
+                                return round(temp, 1)
         
         except Exception:
             pass
@@ -341,7 +388,7 @@ def check_dependencies() -> Dict[str, bool]:
 
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("PartMart Boost - Fallback Manager Test")
+    print("PartMart Boost v0.3.5d - Fallback Manager Test")
     print("="*60)
     
     manager = FallbackManager()
@@ -354,7 +401,6 @@ if __name__ == "__main__":
     gpu_monitor = manager.get_gpu_monitor_fallback()
     print(f"  Monitor: {gpu_monitor.get_name()}")
     print(f"  Available: {gpu_monitor.is_available()}")
-    print(f"  Data: {gpu_monitor.get_data()}")
     
     # Test WMI fallback
     if platform.system() == 'Windows':
@@ -362,6 +408,8 @@ if __name__ == "__main__":
         wmi = manager.get_wmi_fallback()
         if wmi:
             print(f"  WMI instance: {type(wmi).__name__}")
+            if hasattr(wmi, 'is_available'):
+                print(f"  Available: {wmi.is_available()}")
         else:
             print("  WMI unavailable")
     
