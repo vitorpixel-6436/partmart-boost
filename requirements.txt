@@ -1,20 +1,36 @@
-# Core dependencies (Python 3.14 compatible)
-nvidia-ml-py>=12.560.30    # NVIDIA GPU monitoring & control (replaces pynvml)
-psutil>=7.0.0               # System monitoring (CPU, RAM, processes)
-PyQt6>=6.8.0                # UI framework (3.14 support) - use latest
-PyQt6-Qt6>=6.8.0            # Qt6 binaries
-wmi>=1.5.1; sys_platform == 'win32'  # Windows Management Instrumentation
-requests>=2.31.0            # HTTP for updates & telemetry
+# Core dependencies (Python 3.14.x compatible)
+# Always use latest stable versions
 
-# Testing & Quality
-pytest>=7.4.0               # Unit testing
-pytest-cov>=4.1.0           # Code coverage
-pylint>=2.17.0              # Code quality
-black>=23.7.0               # Code formatting
+# GPU monitoring
+nvidia-ml-py>=12.560.30    # NVIDIA GPU control (latest)
+
+# System monitoring
+psutil>=7.0.0               # CPU, RAM, processes (latest)
+
+# UI framework
+PyQt6>=6.8.0                # Qt6 UI framework (Python 3.14 support)
+PyQt6-Qt6>=6.8.0            # Qt6 binaries
+
+# Windows Management
+wmi>=1.5.1; sys_platform == 'win32'  # Windows hardware info
+
+# ML dependencies (optional - для beta feature)
+scikit-learn>=1.6.0         # Lightweight ML models
+numpy>=2.0.0                # Required by sklearn
+joblib>=1.4.0               # Model persistence
+
+# Utilities
+requests>=2.32.0            # HTTP for updates
+
+# Testing & QA
+pytest>=8.3.0               # Unit testing (latest)
+pytest-cov>=6.0.0           # Code coverage
+pylint>=3.3.0               # Code quality
+black>=24.10.0              # Code formatting
 
 # Build & Distribution
-PyInstaller>=6.15.0         # .exe build (3.14 support)
-wheel>=0.41.0               # Package distribution
+PyInstaller>=6.15.0         # .exe build (Python 3.14 support)
+wheel>=0.45.0               # Package distribution
 
 # Development
-ipython>=8.15.0             # Interactive shell
+ipython>=8.30.0             # Interactive shell
