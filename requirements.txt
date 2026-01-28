@@ -1,20 +1,19 @@
-# Core dependencies
-pynvml==11.5.0              # NVIDIA GPU monitoring & control
-psutil==5.9.5               # System monitoring (CPU, RAM, processes)
-PyQt6==6.5.0                # UI framework
-wmi==1.5.1                  # Windows Management Instrumentation
-requests==2.31.0            # HTTP for updates & telemetry
+# Core dependencies (Python 3.14 compatible)
+pynvml>=11.5.0              # NVIDIA GPU monitoring & control
+psutil>=5.9.5               # System monitoring (CPU, RAM, processes)
+PyQt6>=6.8.0                # UI framework (3.14 support)
+wmi>=1.5.1                  # Windows Management Instrumentation
+requests>=2.31.0            # HTTP for updates & telemetry
 
 # Testing & Quality
-pytest==7.4.0               # Unit testing
-pytest-cov==4.1.0           # Code coverage
-pylint==2.17.0              # Code quality
-black==23.7.0               # Code formatting
+pytest>=7.4.0               # Unit testing
+pytest-cov>=4.1.0           # Code coverage
+pylint>=2.17.0              # Code quality
+black>=23.7.0               # Code formatting
 
 # Build & Distribution
-PyInstaller==6.0.0          # .exe build
-wheel==0.41.0               # Package distribution
+PyInstaller>=6.15.0         # .exe build (3.14 support)
+wheel>=0.41.0               # Package distribution
 
 # Development
-ipython==8.15.0             # Interactive shell
-black==23.7.0               # Code formatter
+ipython>=8.15.0             # Interactive shell
