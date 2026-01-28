@@ -1,0 +1,18 @@
+# Cleanup completed
+# Version: 0.3.5d+patch5
+# Date: 2026-01-28
+
+# Removed files:
+# - CHANGELOG_v0.3.5c.md
+# - CHANGELOG_v0.3.5c_hotfix.md
+# - CHANGELOG_v0.3.5c_hotfix2.md
+# - CHANGELOG_v0.3.5d.md
+# - CLEANUP_REPORT.md
+# - requirements-lock.txt
+# - DEVELOPMENT.md (moved to docs/)
+# - PERFORMANCE.md (moved to docs/)
+# - ROADMAP.md (moved to docs/)
+# - INSTALL.md (merged into README)
+# - SECURITY_QUICKSTART.md (merged into SECURITY.md)
+
+# All history preserved in git
