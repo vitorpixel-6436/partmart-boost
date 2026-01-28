@@ -23,20 +23,14 @@ share/python-wheels/
 *.egg
 PIPFILE.lock
 
-# PyInstaller
-*.manifest
-*.spec
-*.exe
-dist/
-build/
-
-# Virtualenv
+# Virtual Environment
 venv/
 ENV/
 env/
-.venv
+env.bak/
+venv.bak/
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
@@ -47,41 +41,57 @@ env/
 # Testing
 .pytest_cache/
 .coverage
-.coverage.*
 htmlcov/
 .tox/
-.hypothesis/
+.nox/
 
-# Logs
-logs/
-*.log
-
-# Config
-config.local.ini
+# Security sensitive files
+*.key
+*.pem
+*.cert
+*.p12
+*.pfx
 .env
 .env.local
+secrets.json
+config/secrets.json
 
-# OS
+# Application data (potentially sensitive)
+data/
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+logs/
+logs/*.log
+config/settings.json
+config/user_data.json
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.bak
+*.swp
+
+# OS files
 Thumbs.db
-.DS_Store
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Test files
+test_*.db
+test_*.json
+test_logs/
 
 # Build artifacts
-*.o
-*.a
-*.dll
-*.so
-*.dylib
-
-# External tools (can be large)
-tools/MSIAfterburner/
-tools/RTSS/
-tools/ReShade/
-tools/SpecialK/
-tools/FurMark/
-
-# Profiles (user data)
-profiles/user_*.json
-
-# Telemetry
-telemetry/
-crash_reports/
+build/
+dist/
+*.exe
+*.msi
+*.dmg
+*.pkg
