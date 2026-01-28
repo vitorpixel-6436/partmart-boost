@@ -19,6 +19,7 @@ class Localization:
             'nav_home': 'Home',
             'nav_gpu': 'GPU',
             'nav_ram': 'RAM',
+            'nav_settings': 'Settings',
             
             # Metrics
             'metric_gpu_temp': 'GPU Temperature',
@@ -82,6 +83,27 @@ class Localization:
             'ai_learning': 'Collecting data about your system...',
             'ai_optimal': 'System running optimally',
             'ai_success_count': 'Successful optimizations: {count}',
+            
+            # Settings Dialog
+            'settings_title': 'Settings',
+            'language': 'Language',
+            'select_language': 'Interface language:',
+            'auto_detect': 'Auto-detect',
+            'language_restart_required': 'Language change requires application restart',
+            
+            'ml_optimizer': 'ML Optimizer (Beta)',
+            'enable_ml': 'Enable AI-powered optimization',
+            'ml_beta_warning': 'Beta feature: May consume up to 50MB RAM',
+            'ml_info': 'Local machine learning model that learns optimal GPU/RAM settings from your usage patterns. Completely offline.',
+            
+            'performance': 'Performance',
+            'update_interval': 'System monitoring update interval:',
+            'update_interval_info': 'Lower values = more frequent updates, higher CPU usage',
+            
+            'save': 'Save',
+            'cancel': 'Cancel',
+            'restart_required': 'Restart Required',
+            'restart_required_message': 'Please restart PartMart Boost for language changes to take effect.',
         },
         'ru': {
             # Window
@@ -91,6 +113,7 @@ class Localization:
             'nav_home': 'Главная',
             'nav_gpu': 'GPU',
             'nav_ram': 'RAM',
+            'nav_settings': 'Настройки',
             
             # Metrics
             'metric_gpu_temp': 'Температура GPU',
@@ -154,6 +177,27 @@ class Localization:
             'ai_learning': 'Сбор данных о вашей системе...',
             'ai_optimal': 'Система работает оптимально',
             'ai_success_count': 'Успешных оптимизаций: {count}',
+            
+            # Settings Dialog
+            'settings_title': 'Настройки',
+            'language': 'Язык',
+            'select_language': 'Язык интерфейса:',
+            'auto_detect': 'Автоопределение',
+            'language_restart_required': 'Изменение языка требует перезапуска приложения',
+            
+            'ml_optimizer': 'ML Оптимизатор (Beta)',
+            'enable_ml': 'Включить оптимизацию на основе ИИ',
+            'ml_beta_warning': 'Beta-функция: может использовать до 50MB RAM',
+            'ml_info': 'Локальная модель машинного обучения, которая изучает оптимальные настройки GPU/RAM на основе ваших паттернов использования. Работает полностью офлайн.',
+            
+            'performance': 'Производительность',
+            'update_interval': 'Интервал обновления мониторинга системы:',
+            'update_interval_info': 'Меньшие значения = более частые обновления, но выше нагрузка на CPU',
+            
+            'save': 'Сохранить',
+            'cancel': 'Отмена',
+            'restart_required': 'Требуется перезапуск',
+            'restart_required_message': 'Пожалуйста, перезапустите PartMart Boost для применения изменений языка.',
         }
     }
     
@@ -217,6 +261,11 @@ def get_localization() -> Localization:
         _localization = Localization()
     return _localization
 
+def set_language(language: str):
+    """Set global language"""
+    loc = get_localization()
+    return loc.set_language(language)
+
 def t(key: str, **kwargs) -> str:
     """Shortcut for translation"""
     return get_localization().get(key, **kwargs)
@@ -224,11 +273,15 @@ def t(key: str, **kwargs) -> str:
 if __name__ == "__main__":
     # Test
     loc = Localization('en')
-    print(f"English: {loc.get('window_title', version='0.3.3')}")
+    print(f"English: {loc.get('window_title', version='0.3.4')}")
+    print(f"Settings: {loc.get('settings_title')}")
+    print(f"ML: {loc.get('ml_optimizer')}")
     
     loc.set_language('ru')
-    print(f"Russian: {loc.get('window_title', version='0.3.3')}")
+    print(f"\nRussian: {loc.get('window_title', version='0.3.4')}")
+    print(f"Settings: {loc.get('settings_title')}")
+    print(f"ML: {loc.get('ml_optimizer')}")
     
     # Auto-detect
     auto_loc = Localization()
-    print(f"Auto-detected: {auto_loc.get_current_language()}")
+    print(f"\nAuto-detected: {auto_loc.get_current_language()}")
