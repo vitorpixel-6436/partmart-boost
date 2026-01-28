@@ -6,6 +6,8 @@ Supports:
 - FULL mode: psutil + pynvml + wmi
 - NATIVE mode: Native OS APIs (WMIC, sysfs, ctypes)
 - MINIMAL mode: Stub monitors (safe defaults)
+
+Version: 0.3.5d - Package 2
 """
 import time
 from typing import Dict, List, Optional
@@ -15,11 +17,17 @@ from monitors import BaseMonitor
 
 
 class MonitorManager:
-    """Manages all system monitors with sovereignty fallback."""
+    """Manages all system monitors with sovereignty fallback.
+    
+    v0.3.5d Package 2 improvements:
+    - Consistent data schemas across all monitors
+    - Health status tracking
+    - Fixed stub data (0 instead of fake values)
+    - Better error recovery
+    """
     
     def __init__(self, prefer_native: bool = False):
-        """
-        Initialize monitor manager.
+        """Initialize monitor manager.
         
         Args:
             prefer_native: If True, use native monitors for max sovereignty
@@ -106,6 +114,7 @@ class MonitorManager:
                 return False
             
             def get_data(self) -> Dict:
+                """v0.3.5d: Consistent schema with real monitors"""
                 if self.mtype == 'gpu':
                     return {
                         "name": "No GPU detected",
@@ -117,26 +126,30 @@ class MonitorManager:
                         "load_mem": 0,
                         "power": 0,
                         "fan_speed": 0,
+                        "memory_total": 0,  # v0.3.5d: Add memory fields
+                        "memory_used": 0,
+                        "memory_free": 0,
                     }
                 elif self.mtype == 'cpu':
                     return {
                         "name": "Unknown CPU",
-                        "load": 0,
+                        "load": 0.0,
                         "temp": None,
-                        "freq": 0,
-                        "freq_min": 0,
-                        "freq_max": 0,
+                        "freq": 0.0,
+                        "freq_min": 0.0,
+                        "freq_max": 0.0,
                         "count": 0,
                         "count_logical": 0,
                     }
                 elif self.mtype == 'ram':
+                    # v0.3.5d FIX: Return 0 instead of fake 16GB
                     return {
-                        "total": 0,
-                        "used": 0,
-                        "free": 0,
-                        "percent": 0,
-                        "speed": 0,
-                        "type": "Unknown",
+                        "total": 0.0,
+                        "used": 0.0,
+                        "free": 0.0,
+                        "percent": 0.0,
+                        "speed": None,  # v0.3.5d: None, not 0
+                        "type": "Unknown",  # v0.3.5d: Add type field
                         "xmp_enabled": False,
                     }
                 return {}
@@ -148,6 +161,11 @@ class MonitorManager:
         
         Returns:
             Dictionary with all system data
+        
+        v0.3.5d Package 2:
+        - Add _monitor_health to each section
+        - Better error recovery
+        - Consistent schemas
         """
         start_time = time.time()
         
@@ -158,10 +176,32 @@ class MonitorManager:
             try:
                 # FIX: Always try to get data, even if not available
                 monitor_data = monitor.get_data()
-                data[name] = monitor_data if monitor_data else self._get_empty_data(name)
+                
+                if monitor_data:
+                    # v0.3.5d: Add health status
+                    monitor_data['_monitor_health'] = {
+                        'available': monitor.is_available(),
+                        'name': monitor.get_name(),
+                        'error': monitor.get_last_error() if hasattr(monitor, 'get_last_error') else None,
+                    }
+                    data[name] = monitor_data
+                else:
+                    # Empty data from monitor
+                    data[name] = self._get_empty_data(name)
+                    data[name]['_monitor_health'] = {
+                        'available': False,
+                        'name': monitor.get_name(),
+                        'error': 'Monitor returned empty data',
+                    }
+            
             except Exception as e:
                 print(f"[ERROR] Failed to get {name} data: {e}")
                 data[name] = self._get_empty_data(name)
+                data[name]['_monitor_health'] = {
+                    'available': False,
+                    'name': f"{name} monitor",
+                    'error': str(e),
+                }
         
         # Track performance
         elapsed = time.time() - start_time
@@ -179,6 +219,8 @@ class MonitorManager:
         
         Returns:
             Empty data dict
+        
+        v0.3.5d Package 2: Consistent with stub monitors
         """
         if monitor_type == 'gpu':
             return {
@@ -191,26 +233,30 @@ class MonitorManager:
                 "load_mem": 0,
                 "power": 0,
                 "fan_speed": 0,
+                "memory_total": 0,  # v0.3.5d: Add memory fields
+                "memory_used": 0,
+                "memory_free": 0,
             }
         elif monitor_type == 'cpu':
             return {
                 "name": "Unknown CPU",
-                "load": 0,
+                "load": 0.0,
                 "temp": None,
-                "freq": 0,
-                "freq_min": 0,
-                "freq_max": 0,
-                "count": 1,
-                "count_logical": 1,
+                "freq": 0.0,
+                "freq_min": 0.0,
+                "freq_max": 0.0,
+                "count": 0,
+                "count_logical": 0,
             }
         elif monitor_type == 'ram':
+            # v0.3.5d FIX: Return 0 instead of fake 16GB/50%
             return {
-                "total": 16.0,
-                "used": 8.0,
-                "free": 8.0,
-                "percent": 50.0,
-                "speed": None,
-                "type": "DDR4",
+                "total": 0.0,
+                "used": 0.0,
+                "free": 0.0,
+                "percent": 0.0,
+                "speed": None,  # v0.3.5d: None, not 0
+                "type": "Unknown",  # v0.3.5d: Add type field
                 "xmp_enabled": False,
             }
         
@@ -271,7 +317,7 @@ class MonitorManager:
 
 if __name__ == "__main__":
     # Benchmark
-    print("[TEST] MonitorManager Performance Benchmark")
+    print("[TEST] MonitorManager v0.3.5d Package 2")
     print("="*60)
     
     # Test 1: Default (auto-detect)
@@ -291,43 +337,39 @@ if __name__ == "__main__":
     print(f"  CPU: {status['cpu']}")
     print(f"  RAM: {status['ram']}")
     
-    # Warmup
-    print("\n[INFO] Warmup (10 iterations)...")
-    for _ in range(10):
-        manager.get_all_data()
-        time.sleep(0.1)
-    
-    # Benchmark
-    print("\n[INFO] Benchmark (100 iterations)...")
-    iterations = 100
-    start = time.time()
-    
-    for _ in range(iterations):
-        data = manager.get_all_data()
-    
-    elapsed = time.time() - start
-    avg_time = (elapsed / iterations) * 1000
-    
-    print(f"\n[RESULT] {iterations} iterations in {elapsed:.3f}s")
-    print(f"[RESULT] Average: {avg_time:.2f}ms per call")
-    print(f"[RESULT] Target: <10ms")
-    print(f"[RESULT] Status: {'PASS ✅' if avg_time < 10 else 'FAIL ❌'}")
-    
-    # Performance stats from manager
-    stats = manager.get_performance_stats()
-    print(f"\n[STATS] Manager internal metrics:")
-    print(f"  Average time: {stats['avg_time_ms']:.2f}ms")
-    print(f"  Last update: {stats['last_time_ms']:.2f}ms")
-    print(f"  Total updates: {stats['total_updates']}")
-    
-    # Sample data
-    print("\n[DATA] Sample output:")
+    # Test data schema
+    print("\n[TEST] Data Schema Validation (v0.3.5d):")
     data = manager.get_all_data()
-    for monitor_name, monitor_data in data.items():
-        print(f"\n  {monitor_name.upper()}:")
-        for k, v in list(monitor_data.items())[:5]:  # First 5 keys
-            print(f"    {k}: {v}")
+    
+    # Check GPU schema
+    gpu_required = ['name', 'temp_gpu', 'load_gpu', 'memory_total', 'memory_used', 'memory_free']
+    print("\n  GPU Schema:")
+    for field in gpu_required:
+        status = '✅' if field in data.get('gpu', {}) else '❌'
+        print(f"    {status} {field}")
+    
+    # Check CPU schema
+    cpu_required = ['name', 'load', 'temp', 'freq', 'count', 'count_logical']
+    print("\n  CPU Schema:")
+    for field in cpu_required:
+        status = '✅' if field in data.get('cpu', {}) else '❌'
+        print(f"    {status} {field}")
+    
+    # Check RAM schema
+    ram_required = ['total', 'used', 'free', 'percent', 'speed', 'type', 'xmp_enabled']
+    print("\n  RAM Schema:")
+    for field in ram_required:
+        status = '✅' if field in data.get('ram', {}) else '❌'
+        value = data.get('ram', {}).get(field)
+        print(f"    {status} {field}: {value}")
+    
+    # Check health status
+    print("\n  Health Status:")
+    for monitor_name in ['gpu', 'cpu', 'ram']:
+        health = data.get(monitor_name, {}).get('_monitor_health', {})
+        status = '✅' if health.get('available') else '❌'
+        print(f"    {status} {monitor_name}: {health.get('name')}")
     
     print("\n" + "="*60)
-    print("✅ MonitorManager works!")
+    print("✅ MonitorManager v0.3.5d Package 2 works!")
     print("="*60)

@@ -1,6 +1,7 @@
 """Optimized RAM Monitor with caching
 PERFORMANCE: <3ms latency, WMI queries cached
 SECURITY: Uses SafeWMI wrapper
+Version: 0.3.5d - Package 2
 """
 import psutil
 import platform
@@ -9,7 +10,13 @@ from typing import Dict, Optional
 from monitors import BaseMonitor
 
 class RAMMonitor(BaseMonitor):
-    """Fast RAM monitoring with WMI caching"""
+    """Fast RAM monitoring with WMI caching
+    
+    v0.3.5d Package 2 fixes:
+    - Add 'type' field to schema
+    - Return None instead of 0 for unavailable speed
+    - Better DDR type detection
+    """
     
     def __init__(self):
         super().__init__()
@@ -50,6 +57,8 @@ class RAMMonitor(BaseMonitor):
         
         Returns:
             RAM speed in MHz or None
+        
+        v0.3.5d: Return None instead of 0 when unavailable
         """
         # Check cache
         now = time.time()
@@ -76,7 +85,7 @@ class RAMMonitor(BaseMonitor):
                     ['dmidecode', '-t', 'memory'],
                     capture_output=True,
                     text=True,
-                    timeout=2,
+                    timeout=3,  # v0.3.5d: Add timeout
                     check=False
                 )
                 
@@ -102,29 +111,74 @@ class RAMMonitor(BaseMonitor):
         # Fallback: mark as checked but unavailable
         self._ram_speed_cached = True
         self._ram_speed_cache_time = now
+        # v0.3.5d FIX: Return None instead of 0
         return None
     
-    def _detect_xmp_status(self, speed: Optional[int]) -> bool:
-        """Heuristic: detect if XMP is enabled
+    def _detect_ram_type(self, speed: Optional[int]) -> str:
+        """Detect RAM type based on speed
         
         Args:
             speed: RAM speed in MHz
         
         Returns:
+            RAM type string (DDR5, DDR4, DDR3, DDR2, or Unknown)
+        
+        v0.3.5d: New method for better type detection
+        """
+        if speed is None:
+            return 'Unknown'
+        
+        # DDR5: 4800+ MHz
+        if speed >= 4800:
+            return 'DDR5'
+        # DDR4: 1600-4799 MHz
+        elif speed >= 1600:
+            return 'DDR4'
+        # DDR3: 800-1599 MHz
+        elif speed >= 800:
+            return 'DDR3'
+        # DDR2: 400-799 MHz
+        elif speed >= 400:
+            return 'DDR2'
+        else:
+            return 'Unknown'
+    
+    def _detect_xmp_status(self, speed: Optional[int], ram_type: str) -> bool:
+        """Heuristic: detect if XMP is enabled
+        
+        Args:
+            speed: RAM speed in MHz
+            ram_type: RAM type (DDR5, DDR4, etc.)
+        
+        Returns:
             True if likely XMP enabled
+        
+        v0.3.5d: Improved logic based on type
         """
         if not speed:
             return False
         
-        # DDR4: Base speed 2133 MHz, XMP typically 2666+ MHz
-        # DDR5: Base speed 4800 MHz, XMP typically 5200+ MHz
+        # JEDEC base speeds by type
+        jedec_speeds = {
+            'DDR5': 4800,
+            'DDR4': 2133,
+            'DDR3': 1333,
+            'DDR2': 667,
+        }
         
-        if speed >= 4800:
-            # DDR5
+        base_speed = jedec_speeds.get(ram_type, 2133)
+        
+        # XMP if speed > base speed + margin
+        # DDR4: XMP if > 2400 (gives some margin)
+        # DDR5: XMP if > 4800
+        if ram_type == 'DDR5':
             return speed > 4800
-        else:
-            # DDR4 or older
+        elif ram_type == 'DDR4':
             return speed > 2400
+        elif ram_type == 'DDR3':
+            return speed > 1600
+        else:
+            return speed > base_speed
     
     def get_name(self) -> str:
         """Get monitor name"""
@@ -139,6 +193,15 @@ class RAMMonitor(BaseMonitor):
         
         Returns:
             Dictionary with RAM metrics
+        
+        v0.3.5d Package 2 schema:
+        - total: float (GB)
+        - used: float (GB)
+        - free: float (GB)
+        - percent: float (0-100)
+        - speed: int or None (MHz)
+        - type: str (DDR5/DDR4/DDR3/DDR2/Unknown)
+        - xmp_enabled: bool
         """
         try:
             # Fast: psutil RAM usage (non-blocking)
@@ -152,26 +215,31 @@ class RAMMonitor(BaseMonitor):
             # Slow: RAM speed detection (cached)
             ram_speed = self._get_ram_speed_cached()
             
+            # v0.3.5d FIX: Detect RAM type
+            ram_type = self._detect_ram_type(ram_speed)
+            
             # Heuristic XMP detection
-            xmp_enabled = self._detect_xmp_status(ram_speed)
+            xmp_enabled = self._detect_xmp_status(ram_speed, ram_type)
             
             return {
-                "total": ram_total,
-                "used": ram_used,
-                "free": ram_free,
-                "percent": ram_percent,
-                "speed": ram_speed if ram_speed else 0,
+                "total": round(ram_total, 2),
+                "used": round(ram_used, 2),
+                "free": round(ram_free, 2),
+                "percent": round(ram_percent, 1),
+                "speed": ram_speed,  # v0.3.5d: None if unavailable, not 0
+                "type": ram_type,  # v0.3.5d FIX: Add type field
                 "xmp_enabled": xmp_enabled,
             }
         
         except Exception as e:
             print(f"[ERROR] RAM data collection failed: {e}")
             return {
-                "total": 0,
-                "used": 0,
-                "free": 0,
-                "percent": 0,
-                "speed": 0,
+                "total": 0.0,
+                "used": 0.0,
+                "free": 0.0,
+                "percent": 0.0,
+                "speed": None,  # v0.3.5d: None, not 0
+                "type": "Unknown",  # v0.3.5d FIX: Add type field
                 "xmp_enabled": False,
             }
 
@@ -179,7 +247,7 @@ if __name__ == "__main__":
     # Performance test
     import time
     
-    print("[TEST] Testing RAMMonitor performance...")
+    print("[TEST] Testing RAMMonitor v0.3.5d Package 2...")
     monitor = RAMMonitor()
     
     # First call (may be slow due to WMI)
@@ -202,9 +270,15 @@ if __name__ == "__main__":
     
     print(f"[RESULT] {iterations} iterations in {elapsed:.3f}s")
     print(f"[RESULT] Average: {avg_time:.2f}ms per call")
-    print(f"[RESULT] Target: <3ms - {'PASS \u2705' if avg_time < 3 else 'FAIL \u274c'}")
+    print(f"[RESULT] Target: <3ms - {'PASS ✅' if avg_time < 3 else 'FAIL ❌'}")
     
-    print("\n[DATA] Sample output:")
+    print("\n[DATA] Sample output (v0.3.5d schema):")
     data = monitor.get_data()
     for k, v in data.items():
         print(f"  {k}: {v}")
+    
+    print("\n[SCHEMA] Required fields present:")
+    required_fields = ['total', 'used', 'free', 'percent', 'speed', 'type', 'xmp_enabled']
+    for field in required_fields:
+        status = '✅' if field in data else '❌'
+        print(f"  {status} {field}")
