@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Performance Monitor
 
-Version: 0.3.5d+patch7 - CRITICAL: Fixed weak ref cleanup and overflow
+Version: 0.3.5d+patch8 - CRITICAL: Fixed contextmanager import
 
-System performance monitoring with fixes.
+System performance monitoring.
 """
 import time
 import threading
 import weakref
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
-from contextmanager import contextmanager
+from contextlib import contextmanager  # PATCH 8: Fixed import!
 
 
 @dataclass
@@ -27,13 +27,10 @@ class PerformanceMetrics:
 
 
 class PerformanceMonitor:
-    """Performance Monitor v0.3.5d+patch7
+    """Performance Monitor v0.3.5d+patch8
     
-    PATCH 7 Fixes:
-    - Fixed weak reference cleanup iteration
-    - Fixed resource cleanup order
-    - Fixed health check overflow (49.7 day bug)
-    - Added proper exception handling
+    PATCH 8 Fix:
+    - Fixed contextlib import (was contextmanager)
     """
     
     MIN_TEMP = -50.0
@@ -54,7 +51,7 @@ class PerformanceMonitor:
         self._metric_count = 0
         self._allocated_resources: List[Any] = []
         
-        print("[PerformanceMonitor v0.3.5d+patch7] Initialized")
+        print("[PerformanceMonitor v0.3.5d+patch8] Initialized")
     
     def start(self) -> bool:
         with self._lock:
@@ -86,8 +83,6 @@ class PerformanceMonitor:
                 self._running = False
     
     def _cleanup_resources(self):
-        """PATCH 7: Fixed cleanup order"""
-        # PATCH 7: Reverse order cleanup
         for resource in reversed(self._allocated_resources):
             try:
                 if hasattr(resource, '__exit__'):
@@ -100,8 +95,6 @@ class PerformanceMonitor:
                 print(f"[PerformanceMonitor] Resource cleanup error: {e}")
         
         self._allocated_resources.clear()
-        
-        # PATCH 7: Safe weak reference cleanup
         self._callbacks.clear()
     
     def get_metrics(self) -> Optional[PerformanceMetrics]:
@@ -138,12 +131,10 @@ class PerformanceMonitor:
         )
     
     def _check_health(self):
-        """PATCH 7: Fixed overflow after 49.7 days"""
         if self._last_health_check is None:
             return
         
         current_time = time.perf_counter()
-        # PATCH 7: Use modulo to prevent overflow
         elapsed = (current_time - self._last_health_check) % (2**31)
         
         if elapsed >= self.HEALTH_CHECK_INTERVAL:
@@ -157,9 +148,7 @@ class PerformanceMonitor:
             self._callbacks.append(weakref.ref(callback))
     
     def _notify_callbacks(self, metrics: PerformanceMetrics):
-        """PATCH 7: Fixed iteration during cleanup"""
         with self._lock:
-            # PATCH 7: Copy list before iteration
             callbacks_copy = list(self._callbacks)
             alive_callbacks = []
             
@@ -224,21 +213,3 @@ class PerformanceMonitor:
                 'callback_count': len(self._callbacks),
                 'resource_count': len(self._allocated_resources),
             }
-
-
-if __name__ == "__main__":
-    print("="*60)
-    print("PerformanceMonitor v0.3.5d+patch7 Test")
-    print("="*60)
-    
-    monitor = PerformanceMonitor()
-    monitor.start()
-    
-    for i in range(5):
-        metrics = monitor.get_metrics()
-        if metrics:
-            print(f"Sample {i+1}: FPS={metrics.fps:.1f}, GPU={metrics.gpu_util:.1f}%")
-        time.sleep(0.1)
-    
-    monitor.stop()
-    print("✅ PerformanceMonitor patch7 - All tests passed!")
