@@ -1,166 +1,169 @@
-# 🐉 PartMart Boost
+# 🐉 PartMart Boost v0.2-alpha
 
-**Игровой оптимизатор ПК. +40-80% FPS. Один клик.**
+**Игровой оптимизатор ПК с РЕАЛЬНЫМ мониторингом системы**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4)](https://www.microsoft.com/windows)
-![Status: Alpha](https://img.shields.io/badge/Status-Alpha-red)
+![Status: Alpha](https://img.shields.io/badge/Status-Alpha-orange)
 
 ---
 
-## 🚀 Что это?
+## 🆕 Что нового в v0.2-alpha (28 января 2026)
 
-**PartMart Boost** — desktop приложение для покупателей ПК от [PartMart](https://avito.ru/user/partmart) (Samara). Реальная оптимизация видеокарты и оперативной памяти для увеличения FPS в играх.
+### ✅ РЕАЛЬНЫЙ мониторинг системы
+- **GPU**: температура (core + hotspot), частоты, загрузка, питание через `pynvml`
+- **CPU**: загрузка, температура, частота через `psutil`
+- **RAM**: использование, скорость, автоопределение XMP статуса через WMI
+- **Автообновление**: данные обновляются каждые 2 секунды
 
-### Реальный результат (тестирование RTX 3060, Ryzen 5 5600X):
-```
-Valorant:
-  ДО: 89 FPS (avg), 76°C GPU
-  ПОСЛЕ: 142 FPS (avg), 68°C GPU
-  ПРИРОСТ: +60% FPS, -8°C
+### ✅ Улучшенный UI
+- Дизайн в стиле Steam Big Picture
+- Sidebar 280px с голубыми акцентами (#66c0f4)
+- Прогресс-бары для GPU/RAM загрузки
+- Плавные градиенты и улучшенная типографика
 
-CS:GO:
-  ДО: 145 FPS (avg)
-  ПОСЛЕ: 220 FPS (avg)
-  ПРИРОСТ: +52% FPS
+### ✅ Упрощенная установка
+- **`launch.bat`** — запуск в 1 клик (автоустановка зависимостей)
+- Больше не нужно вручную устанавливать pip/requirements
 
-Cyberpunk 2077 (Ultra preset):
-  ДО: 58 FPS (avg), 82°C
-  ПОСЛЕ: 78 FPS (avg), 71°C
-  ПРИРОСТ: +34% FPS (FSR 3 included)
-```
-
----
-
-## ✨ Главные фичи
-
-### 1. **GPU Optimizer**
-- **Undervolt** (-50mV до -150mV): безопасное снижение напряжения → -8°C, +5-10 FPS
-- **Memory OC** (+200-500MHz): разгон видеопамяти → +8-15 FPS
-- **Power Tuning**: оптимальный TDP для баланса шум/производительность
-- **Fan Curve**: автоматическая кривая для температуры
-- **Поддержка**: NVIDIA (GTX 10xx–RTX 40xx), AMD (RX 5xx–7xxx), Intel Arc
-
-### 2. **RAM Optimizer**
-- **XMP Enable**: автоматическое включение профиля в WMI + Ryzen Master
-- **Standby List Cleaner**: освобождение "зависших" памяти
-- **Timing Optimization**: безопасная подстройка таймингов
-- **Поддержка**: DDR3, DDR4, DDR5
-
-### 3. **FrameGen Magic** 🎮
-- **AMD FSR 3**: удвоение FPS на любом GPU (работает везде!)
-- **NVIDIA DLSS 3**: frame generation для RTX 40xx
-- **Lossless Scaling**: софтверная интерполяция как fallback
-- **Auto-inject**: автоматическое включение в игры (ReShade, SpecialK)
-
-### 4. **One-Click Boost ⚡**
-```
-┌──────────────────────────────────────┐
-│   🐉 PartMart Boost                  │
-├──────────────────────────────────────┤
-│   GPU: RTX 3060 (stock)              │
-│   RAM: 16GB DDR4-3200 (XMP off)      │
-│                                      │
-│   ┌────────────────────────────────┐ │
-│   │ ⚡ БЫСТРЫЙ БУСТ (1 клик)        │ │
-│   │ Ожидаемый прирост: +50 FPS     │ │
-│   └────────────────────────────────┘ │
-│                                      │
-│   Последний результат (Valorant):    │
-│   • 89 → 142 FPS (+60%)              │
-│   • 76°C → 68°C (-8°C)               │
-└──────────────────────────────────────┘
-```
-
-### 5. **RTSS Live Monitor**
-Оверлей в игре с FPS, температурой, нагрузкой на GPU/CPU в реальном времени.
-
-### 6. **PartMart Integration**
-- История покупки ПК с PartMart
-- Кнопка "Спасибо продавцу" → отзыв на Avito → скидка
-- Реферальная система: приведи друга → скидка для обоих
-- Premium tier (399₽/год): custom profiles, DLSS 3, cloud sync
+### ⚠️ Что еще в разработке
+- GPU Optimizer (undervolt, OC) — Coming Soon
+- RAM XMP Enable — Coming Soon
+- FrameGen (FSR 3, DLSS 3) — Coming Soon
+- Game Profiles — Coming Soon
 
 ---
 
-## 📥 Установка
+## 📥 Установка (ПРОСТАЯ)
 
-### Требования:
-- **ОС**: Windows 10 (build 19043+) или Windows 11
-- **RAM**: 2GB+
-- **GPU**: NVIDIA (GTX 10xx+), AMD (RX 5xx+), Intel Arc
-- **Права**: Administrator (для GPU/RAM control)
+### Способ 1: Один клик (рекомендуется) 🚀
 
-### Скачать:
-1. Перейди на [Releases](https://github.com/vitorpixel-6436/partmart-boost/releases)
-2. Скачай последний `partmart-boost-v*.exe`
-3. Запусти установщик
-4. PartMart Boost готов! 🚀
-
-### Или собрать с исходников:
 ```bash
+# 1. Скачай проект
 git clone https://github.com/vitorpixel-6436/partmart-boost.git
 cd partmart-boost
 
-# Установить зависимости
+# 2. Запусти launcher (автоматически установит зависимости)
+launch.bat
+```
+
+**Готово!** Приложение автоматически установит все зависимости и запустится.
+
+### Способ 2: Ручная установка
+
+```bash
+# 1. Установить Python 3.11+ с https://python.org
+
+# 2. Скачать проект
+git clone https://github.com/vitorpixel-6436/partmart-boost.git
+cd partmart-boost
+
+# 3. Установить зависимости
 pip install -r requirements.txt
 
-# Запустить
+# 4. Запустить
 python src/main.py
-
-# Собрать .exe
-pyinstaller --onefile --windowed --icon=assets/icon.ico src/main.py
 ```
+
+### Требования:
+- **Python**: 3.11+ (3.14 поддерживается)
+- **ОС**: Windows 10 (build 19043+) или Windows 11
+- **RAM**: 2GB+
+- **GPU**: NVIDIA (рекомендуется), AMD, Intel Arc
 
 ---
 
-## 🎮 Как использовать
+## 🎮 Что это?
 
-### Быстрый старт:
-1. Открыть PartMart Boost
-2. Нажать **⚡ БЫСТРЫЙ БУСТ**
-3. Подождать 30 сек (stability test)
-4. Готово! +40-80% FPS в игры
+**PartMart Boost** — desktop приложение для покупателей ПК от [PartMart](https://avito.ru/user/partmart) (Samara). 
 
-### Продвинутый режим:
-- Перейти на вкладку **GPU Optimizer**
-- Выбрать undervolt: -50mV (консервативно) или -100mV (агрессивно)
-- Memory OC: +200MHz (стабильно) или +500MHz (максимум)
-- Нажать **Apply** → тест стабильности
+### Текущие возможности (v0.2-alpha):
+- ✅ Реальное отображение температур GPU/CPU
+- ✅ Мониторинг загрузки GPU и RAM в реальном времени
+- ✅ Автоопределение XMP статуса памяти
+- ✅ Steam-inspired интерфейс
+- ✅ Автообновление данных каждые 2 секунды
 
-### Game Launcher:
-- Выбрать игру из списка (Valorant, CS2, Cyberpunk, etc.)
-- PartMart автоматически inject оптимизации + FrameGen
-- Играть с +40-80% FPS
+### Планируется (v0.5-beta):
+- ⏳ GPU Optimizer (undervolt, memory OC)
+- ⏳ RAM XMP Enable
+- ⏳ Quick Boost (1-click оптимизация)
+- ⏳ FrameGen (FSR 3, DLSS 3)
+- ⏳ Game Profiles
+- ⏳ RTSS Overlay
+
+---
+
+## 🖼️ Интерфейс
+
+### Главная страница
+```
+┌─────────────────────────────────────────────────────┐
+│ 🐉 PartMart Boost v0.2                               │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  🚀 БЫСТРЫЙ СТАРТ                                   │
+│  Оптимизируй свой ПК в один клик                    │
+│                                                     │
+│  ┌────────────────────────────────────────────────┐ │
+│  │ 💻 СТАТУС СИСТЕМЫ (РЕАЛЬНЫЕ ДАННЫЕ)            │ │
+│  │                                                │ │
+│  │ 🎮 GPU: NVIDIA RTX 3060 (45% load)             │ │
+│  │ 🧠 RAM: 14.2GB / 16GB (3200 MHz)               │ │
+│  │ 🌡️ GPU: 68°C (hotspot) | CPU: 55°C            │ │
+│  │                                                │ │
+│  │ █████████████████░░░░░ RAM 89%                 │ │
+│  └────────────────────────────────────────────────┘ │
+│                                                     │
+│  ┌────────────────────────────────────────────────┐ │
+│  │ ⚡ БЫСТРЫЙ БУСТ                                 │ │
+│  │ GPU Optimize + RAM Cleanup + System Tweaks     │ │
+│  │                                                │ │
+│  │ 📈 Ожидаемый прирост: +30-50 FPS               │ │
+│  │                                                │ │
+│  │  🚀 ЗАПУСТИТЬ ОПТИМИЗАЦИЮ                      │ │
+│  └────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+```
+
+### Sidebar (Steam-inspired)
+```
+┌──────────────────┐
+│      🐉          │
+│  PartMart Boost  │
+│  Твой ПК. Твоя   │
+│      мощь.       │
+├──────────────────┤
+│ 🏠  ГЛАВНАЯ      │ ← Active
+│ ⚡  GPU CONTROL  │
+│ 🧠  RAM TUNER    │
+│ 🎮  FRAMEGEN     │
+│ 🎯  ИГРЫ         │
+│ ⚙️  НАСТРОЙКИ    │
+├──────────────────┤
+│   v0.2.0-alpha   │
+└──────────────────┘
+```
 
 ---
 
 ## ⚙️ Технический стек
 
-```python
-Язык:           Python 3.11+
-UI:             PyQt6 (custom PartMart theme)
-Размер:         <150MB
-ОС:             Windows 10 build 19043+, Windows 11
-Права:          Administrator
+### Мониторинг
+- **pynvml** (13.0.1+) — NVIDIA GPU мониторинг
+- **psutil** (7.2.1+) — CPU/RAM мониторинг
+- **wmi** (1.5.1+) — XMP detection
 
-Зависимости:
-├─ pynvml          → NVIDIA GPU control
-├─ psutil          → System monitoring
-├─ PyQt6           → UI framework
-├─ wmi             → Windows Management (XMP)
-├─ requests        → Updates & telemetry
-└─ pytest          → Testing
+### UI
+- **PyQt6** (6.10+) — современный интерфейс
+- **QTimer** — автообновление данных
+- **QSS** — Steam-inspired стили
 
-Внешние инструменты:
-├─ MSI Afterburner → GPU fallback control
-├─ RTSS SDK        → Overlay (FPS/temp)
-├─ ReShade 5.9+    → FrameGen injection
-├─ SpecialK        → Frame unlock
-├─ FurMark         → Stability testing
-└─ EmptyStandbyList.exe → RAM cleaner
-```
+### Язык и платформа
+- **Python** 3.11+ (3.14 поддерживается)
+- **Windows** 10/11 только
+- **Размер**: ~150MB
 
 ---
 
@@ -168,134 +171,96 @@ UI:             PyQt6 (custom PartMart theme)
 
 ```
 partmart-boost/
+├─ launch.bat                      # 🚀 Launcher (1-click)
+├─ VERSION                         # Версия (0.2.0-alpha)
 ├─ src/
 │  ├─ main.py                      # Entry point
+│  ├─ system_monitor.py            # 🆕 Реальный мониторинг
+│  ├─ ai_optimizer.py              # AI рекомендации
 │  ├─ ui/
-│  │  ├─ main_window.py            # Главное окно
-│  │  ├─ gpu_optimizer_ui.py       # GPU вкладка
-│  │  ├─ ram_tuner_ui.py           # RAM вкладка
-│  │  ├─ framegen_ui.py            # FrameGen вкладка
-│  │  ├─ monitor_overlay.py        # RTSS overlay
-│  │  ├─ partmart_info_ui.py       # О PartMart
-│  │  └─ theme.qss                 # Dark theme
-│  ├─ gpu/
-│  │  ├─ nvidia_control.py         # NVIDIA (pynvml + nvapi64)
-│  │  ├─ amd_control.py            # AMD (OverdriveNTool)
-│  │  ├─ intel_control.py          # Intel Arc API
-│  │  └─ gpu_optimizer.py          # Unified logic
-│  ├─ ram/
-│  │  ├─ xmp_enabler.py            # XMP control
-│  │  ├─ standby_cleaner.py        # RAM cleaner
-│  │  └─ ram_optimizer.py          # Unified logic
-│  ├─ framegen/
-│  │  ├─ fsr3_inject.py            # AMD FSR 3
-│  │  ├─ dlss3_inject.py           # NVIDIA DLSS 3
-│  │  ├─ lossless_scaling.py       # Lossless Scaling
-│  │  └─ framegen_manager.py       # Manager
-│  ├─ optimizer/
-│  │  ├─ quick_boost.py            # 1-click optimization
-│  │  ├─ stability_test.py         # FurMark stress test
-│  │  ├─ auto_revert.py            # Crash recovery
-│  │  └─ os_tweaks.py              # Windows tweaks
-│  ├─ partmart/
-│  │  ├─ seller_integration.py     # Seller ID, history
-│  │  ├─ referral_system.py        # Referral links
-│  │  ├─ review_helper.py          # Avito review
-│  │  └─ premium_manager.py        # Premium tier
-│  ├─ monitor/
-│  │  ├─ rtss_overlay.py           # RivaTuner overlay
-│  │  ├─ hwinfo_reader.py          # HWiNFO data
-│  │  └─ performance_tracker.py    # FPS history
-│  ├─ telemetry/
-│  │  ├─ analytics.py              # Anonymous analytics
-│  │  └─ crash_reporter.py         # Crash logs
-│  ├─ updater/
-│  │  └─ auto_updater.py           # GitHub Releases
-│  └─ utils/
-│     ├─ config.py                 # Configuration
-│     ├─ logger.py                 # Logging
-│     └─ constants.py              # Constants
-├─ tests/
-│  ├─ test_gpu_nvidia.py           # GPU tests
-│  ├─ test_ram_xmp.py              # RAM tests
-│  └─ test_stability.py            # Stability tests
-├─ assets/
-│  ├─ logo_dragon.png              # PartMart dragon
-│  ├─ icon.ico                     # App icon
-│  └─ theme/                       # QSS theme
-├─ tools/                          # External binaries
-├─ profiles/                       # Optimization presets
-├─ .github/
-│  └─ workflows/
-│     ├─ tests.yml                 # CI: pytest
-│     ├─ build.yml                 # CD: PyInstaller
-│     └─ release.yml               # GitHub Releases
-├─ README.md                       # This file
-├─ LICENSE                         # MIT License
-├─ requirements.txt                # Python dependencies
-└─ VERSION                         # Version: 0.1-alpha
+│  │  ├─ main_window.py            # 🆕 Главное окно с автообновлением
+│  │  ├─ ai_widget.py              # AI insights widget
+│  │  └─ theme.qss                 # Steam-inspired theme
+│  └─ gpu/
+│     ├─ nvidia_control.py         # NVIDIA (pynvml)
+│     └─ amd_control.py            # AMD (симуляция)
+├─ requirements.txt                # Зависимости
+└─ README.md                       # Это файл
 ```
 
 ---
 
-## 🛡️ Безопасность и стабильность
+## 🔧 Устранение проблем
 
-### Критичные правила:
-1. ✅ **Все твики обратимы** — кнопка "Сброс" восстанавливает stock
-2. ✅ **Stability test обязателен** — 30 сек FurMark перед apply
-3. ✅ **Auto-revert** — если система не загрузилась → автоматический откат
-4. ✅ **Conservative defaults** — undervolt -50mV, memory OC +200MHz
-5. ✅ **Temperature protection** — если >85°C → немедленный откат
-6. ✅ **Crash detection** — если игра упала 2 раза → disable inject
-7. ✅ **Admin rights required** — явное требование при запуске
-8. ✅ **Full logging** — `logs/partmart-boost.log` для debug
-9. ✅ **Anticheat whitelist** — Valorant, EAC, BattlEye → no inject
+### Ошибка "Could not parse stylesheet"
+✅ **Исправлено в v0.2** — убраны некорректные CSS свойства из QSS
+
+### Статичные данные (температура не меняется)
+✅ **Исправлено в v0.2** — реальное чтение через pynvml/psutil + QTimer
+
+### Неверная температура GPU (+18°C разница)
+✅ **Исправлено в v0.2** — теперь используется hotspot temperature (если доступна)
+
+### XMP статус неверный
+✅ **Исправлено в v0.2** — реальное чтение через WMI (ConfiguredClockSpeed)
+
+### Python 3.14 не поддерживается
+✅ **Исправлено** — обновлены зависимости (PyQt6 6.10+, PyInstaller 6.15+)
 
 ---
 
-## 📈 Метрики успеха (v1.0)
+## 🛡️ Безопасность
 
-- ✅ 0 crashes на 1000+ установок (99.9% stability)
-- ✅ +40-80% FPS прирост (реальный, измеримый)
-- ✅ 95%+ GPU compatibility (NVIDIA, AMD, Intel)
-- ✅ <150MB размер
-- ✅ 85%+ user retention (не удаляют после месяца)
-- ✅ 40%+ оставляют отзыв PartMart на Avito
-- ✅ 25%+ используют реферальную систему
+### Текущая версия (v0.2-alpha)
+- ✅ **Только чтение** — никаких изменений системы
+- ✅ **Безопасный мониторинг** — стандартные API (pynvml, psutil)
+- ✅ **Без прав администратора** — для базового мониторинга
+
+### Будущие версии (v0.5+)
+- ⏳ **Права админа** — для GPU/RAM оптимизации
+- ⏳ **Auto-revert** — откат при крашах
+- ⏳ **Stability test** — перед применением твиков
 
 ---
 
 ## 🗓️ Дорожная карта
 
-| Версия | Срок | Фичи |
-|--------|------|-------|
-| **v0.1-MVP** | Week 1-2 | NVIDIA GPU, RAM XMP, Quick Boost, RTSS overlay |
-| **v0.5-Beta** | Week 3-4 | AMD GPU, FrameGen (FSR 3), Game profiles, PartMart integration |
-| **v1.0-Release** | Week 5-6 | Premium tier, Advanced RAM tuning, NSIS installer, Code signing |
+| Версия | Статус | Фичи |
+|--------|--------|------|
+| **v0.2-alpha** | ✅ **ТЕКУЩАЯ** | Реальный мониторинг, Steam UI, launch.bat |
+| **v0.3-alpha** | 🔄 В разработке | GPU Optimizer (NVIDIA), RAM XMP Enable |
+| **v0.5-beta** | 📅 Февраль 2026 | AMD GPU, FrameGen (FSR 3), Game profiles |
+| **v1.0-release** | 📅 Март 2026 | Premium tier, NSIS installer, Code signing |
 
 ---
 
-## 🤝 Contributing
+## 🐛 Известные проблемы
 
-Это production проект для PartMart. Вклады приветствуются!
+- ⚠️ **CPU температура**: не работает без OpenHardwareMonitor/HWiNFO
+- ⚠️ **AMD GPU**: пока только симуляция (реальный контроль в v0.3)
+- ⚠️ **Quick Boost**: UI есть, функционал в разработке
 
-1. Fork репо
-2. Create feature branch: `git checkout -b feature/my-feature`
-3. Write tests + code
-4. Commit: `git commit -m "feat(module): description"`
-5. Push: `git push origin feature/my-feature`
-6. Open PR к ветке `dev`
-
-**Code quality требования:**
-- Coverage >80% (pytest)
-- No pylint warnings
-- Black formatted
+**Отчеты о багах**: [GitHub Issues](https://github.com/vitorpixel-6436/partmart-boost/issues)
 
 ---
 
-## 📝 Лицензия
+## 📝 Changelog
 
-MIT License — see [LICENSE](LICENSE) file.
+### v0.2.0-alpha (28 января 2026)
+- ✅ Добавлен реальный мониторинг GPU/CPU/RAM
+- ✅ Автообновление данных каждые 2 секунды
+- ✅ Hotspot temperature для GPU
+- ✅ XMP detection через WMI
+- ✅ Прогресс-бары для GPU/RAM
+- ✅ Улучшенный Steam-inspired UI
+- ✅ Launcher `launch.bat` для упрощенной установки
+- ✅ Поддержка Python 3.14
+- 🐛 Исправлены ошибки парсинга QSS
+
+### v0.1.0-alpha (27 января 2026)
+- ✅ Базовый UI с заглушками
+- ✅ AI Optimizer (симуляция)
+- ✅ Структура проекта
 
 ---
 
@@ -304,7 +269,7 @@ MIT License — see [LICENSE](LICENSE) file.
 **PartMart** (Samara, Russia)
 - 🌐 Avito: [PartMart](https://avito.ru/user/partmart)
 - 💬 Issues: [GitHub Issues](https://github.com/vitorpixel-6436/partmart-boost/issues)
-- 💭 Discussions: [GitHub Discussions](https://github.com/vitorpixel-6436/partmart-boost/discussions)
+- 📧 Support: создай issue с тегом `help`
 
 ---
 
@@ -314,12 +279,11 @@ MIT License — see [LICENSE](LICENSE) file.
 
 **Благодарности:**
 - NVIDIA NVML SDK
-- AMD OverdriveNTool
-- ReShade & SpecialK teams
 - PyQt6 community
+- Steam (design inspiration)
 
 ---
 
 **🚀 Твой ПК. Твоя мощь.**
 
-*PartMart Boost — where gaming meets optimization*
+*PartMart Boost — real-time PC optimization*
