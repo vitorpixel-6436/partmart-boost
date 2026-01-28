@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Session Recording
 
-Version: 0.3.5d_package3.4b
+Version: 0.3.5d_package3.5a - BUGFIX: Added numpy import
 
 Session management for analytics system.
 
@@ -15,6 +15,14 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+
+# BUGFIX: Added missing numpy import
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+    print("[Session] WARNING: numpy not available, using fallback calculations")
 
 
 @dataclass
@@ -92,7 +100,7 @@ class SessionSummary:
 class Session:
     """Analytics session
     
-    v0.3.5d_package3.4b
+    v0.3.5d_package3.5a - BUGFIX: Fixed numpy import
     
     Tracks performance metrics and events for a recording session.
     
@@ -250,8 +258,6 @@ class Session:
             >>> summary = session.get_summary()
             >>> print(f"Avg FPS: {summary.avg_fps:.1f}")
         """
-        import numpy as np
-        
         if not self.metrics:
             return SessionSummary(
                 session_id=self.session_id,
@@ -277,10 +283,27 @@ class Session:
         cpu_utils = [m.cpu_util for m in self.metrics]
         temps = [m.temperature for m in self.metrics]
         
-        # Calculate percentiles
-        fps_sorted = sorted(fps_values)
-        fps_1_percent = fps_sorted[max(0, int(len(fps_sorted) * 0.01))]
-        fps_01_percent = fps_sorted[max(0, int(len(fps_sorted) * 0.001))]
+        # BUGFIX: Use numpy if available, otherwise fallback
+        if NUMPY_AVAILABLE:
+            avg_fps = float(np.mean(fps_values))
+            avg_frame_time = float(np.mean(frame_times))
+            avg_gpu_util = float(np.mean(gpu_utils)) if gpu_utils else 0.0
+            avg_cpu_util = float(np.mean(cpu_utils)) if cpu_utils else 0.0
+            
+            # Calculate percentiles
+            fps_sorted = sorted(fps_values)
+            fps_1_percent = fps_sorted[max(0, int(len(fps_sorted) * 0.01))]
+            fps_01_percent = fps_sorted[max(0, int(len(fps_sorted) * 0.001))]
+        else:
+            # Fallback: manual calculation
+            avg_fps = sum(fps_values) / len(fps_values)
+            avg_frame_time = sum(frame_times) / len(frame_times)
+            avg_gpu_util = sum(gpu_utils) / len(gpu_utils) if gpu_utils else 0.0
+            avg_cpu_util = sum(cpu_utils) / len(cpu_utils) if cpu_utils else 0.0
+            
+            fps_sorted = sorted(fps_values)
+            fps_1_percent = fps_sorted[max(0, int(len(fps_sorted) * 0.01))]
+            fps_01_percent = fps_sorted[max(0, int(len(fps_sorted) * 0.001))]
         
         # Count events
         quality_changes = sum(1 for e in self.events if e.event_type == 'quality_change')
@@ -290,14 +313,14 @@ class Session:
             session_id=self.session_id,
             duration=self.get_duration(),
             total_frames=len(self.metrics),
-            avg_fps=np.mean(fps_values),
+            avg_fps=avg_fps,
             min_fps=min(fps_values),
             max_fps=max(fps_values),
             fps_1_percent=fps_1_percent,
             fps_01_percent=fps_01_percent,
-            avg_frame_time=np.mean(frame_times),
-            avg_gpu_util=np.mean(gpu_utils) if gpu_utils else 0.0,
-            avg_cpu_util=np.mean(cpu_utils) if cpu_utils else 0.0,
+            avg_frame_time=avg_frame_time,
+            avg_gpu_util=avg_gpu_util,
+            avg_cpu_util=avg_cpu_util,
             max_temperature=max(temps) if temps else 0.0,
             quality_changes=quality_changes,
             thermal_events=thermal_events,
@@ -308,7 +331,7 @@ class Session:
 
 if __name__ == "__main__":
     print("="*60)
-    print("Session v0.3.5d_package3.4b Test")
+    print("Session v0.3.5d_package3.5a Test (BUGFIX)")
     print("="*60)
     
     session = Session("test_session")
@@ -317,17 +340,31 @@ if __name__ == "__main__":
     session.start()
     
     print("\n[Test 2] Record frames")
-    import numpy as np
-    for i in range(100):
-        fps = 60 + np.random.normal(0, 2)
-        frame_time = 1000 / fps
-        session.record_frame(
-            fps=fps,
-            frame_time=frame_time,
-            gpu_util=85 + np.random.normal(0, 5),
-            cpu_util=60 + np.random.normal(0, 3),
-            temperature=75 + np.random.normal(0, 2)
-        )
+    if NUMPY_AVAILABLE:
+        import numpy as np
+        for i in range(100):
+            fps = 60 + np.random.normal(0, 2)
+            frame_time = 1000 / fps
+            session.record_frame(
+                fps=fps,
+                frame_time=frame_time,
+                gpu_util=85 + np.random.normal(0, 5),
+                cpu_util=60 + np.random.normal(0, 3),
+                temperature=75 + np.random.normal(0, 2)
+            )
+    else:
+        # Fallback without numpy
+        for i in range(100):
+            import random
+            fps = 60 + random.gauss(0, 2)
+            frame_time = 1000 / fps
+            session.record_frame(
+                fps=fps,
+                frame_time=frame_time,
+                gpu_util=85 + random.gauss(0, 5),
+                cpu_util=60 + random.gauss(0, 3),
+                temperature=75 + random.gauss(0, 2)
+            )
     print(f"  Recorded {len(session.metrics)} frames")
     
     print("\n[Test 3] Record events")
@@ -353,5 +390,5 @@ if __name__ == "__main__":
     print(f"  Quality changes: {summary.quality_changes}")
     
     print("\n" + "="*60)
-    print("✅ Session - All Tests Passed!")
+    print("✅ Session - All Tests Passed! (BUGFIX)")
     print("="*60)
