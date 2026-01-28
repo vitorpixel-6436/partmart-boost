@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLabel, QFrame, QStackedWidget, QApplication, QProgressBar, QGridLayout
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QPalette, QColor
 import sys
 import os
 
@@ -14,12 +14,109 @@ from ui.ai_widget import PartMartAIWidget
 from ai_optimizer import PartMartAIOptimizer
 from system_monitor import SystemMonitor
 
+class MetricCard(QFrame):
+    """Standalone metric card with guaranteed text visibility"""
+    
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(180)
+        self.setAutoFillBackground(True)
+        
+        # Style
+        self.setStyleSheet("""
+            MetricCard {
+                background-color: #1A1A1A;
+                border-left: 4px solid #E63946;
+                border-radius: 16px;
+            }
+            MetricCard:hover {
+                background-color: #252525;
+            }
+        """)
+        
+        # Layout
+        layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+        
+        # Title - GUARANTEED VISIBLE
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                color: #A0A0A0;
+                background: transparent;
+            }
+        """)
+        layout.addWidget(self.title_label)
+        
+        # Value - LARGE AND VISIBLE
+        self.value_label = QLabel("--")
+        self.value_label.setStyleSheet("""
+            QLabel {
+                font-size: 36px;
+                font-weight: 700;
+                color: #E63946;
+                background: transparent;
+            }
+        """)
+        layout.addWidget(self.value_label)
+        
+        # Subtitle - VISIBLE
+        self.subtitle_label = QLabel("Loading...")
+        self.subtitle_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #666666;
+                background: transparent;
+            }
+        """)
+        layout.addWidget(self.subtitle_label)
+        
+        # Progress bar
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(True)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background: #0D0D0D;
+                border-radius: 8px;
+                text-align: center;
+                color: white;
+                height: 24px;
+                font-weight: 600;
+                font-size: 12px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E63946, stop:1 #FF4757);
+                border-radius: 8px;
+            }
+        """)
+        layout.addWidget(self.progress)
+        
+        self.setLayout(layout)
+    
+    def set_value(self, value: str):
+        self.value_label.setText(value)
+    
+    def set_subtitle(self, text: str):
+        self.subtitle_label.setText(text)
+    
+    def set_progress(self, value: int, text: str = ""):
+        self.progress.setValue(value)
+        if text:
+            self.progress.setFormat(text)
+
 class PartMartMainWindow(QMainWindow):
     """Modern card-based UI with PartMart red branding"""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("🐉 PartMart Boost v0.3-alpha")
+        self.setWindowTitle("🐉 PartMart Boost v0.3.1-alpha")
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 700)
         
@@ -28,16 +125,10 @@ class PartMartMainWindow(QMainWindow):
         self.ai_engine = PartMartAIOptimizer()
         self.nav_buttons = []
         
-        # UI elements for updates
-        self.gpu_temp_label = None
-        self.cpu_load_label = None
-        self.ram_value_label = None
-        self.gpu_name_label = None
-        self.cpu_temp_label = None
-        self.ram_subtitle_label = None
-        self.gpu_load_bar = None
-        self.ram_usage_bar = None
-        self.cpu_load_bar = None
+        # Metric cards
+        self.gpu_card = None
+        self.ram_card = None
+        self.cpu_card = None
         
         self._setup_ui()
         
@@ -48,27 +139,13 @@ class PartMartMainWindow(QMainWindow):
         self._update_system_data()
 
     def _setup_ui(self):
-        # Main stylesheet with PartMart red branding
+        # Main stylesheet
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #0D0D0D;
             }
             QLabel {
                 color: #FFFFFF;
-            }
-            QProgressBar {
-                border: none;
-                background: #1A1A1A;
-                border-radius: 8px;
-                text-align: center;
-                color: white;
-                height: 24px;
-                font-weight: 600;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #E63946, stop:1 #FF4757);
-                border-radius: 8px;
             }
         """)
         
@@ -191,29 +268,14 @@ class PartMartMainWindow(QMainWindow):
         grid = QGridLayout()
         grid.setSpacing(20)
         
-        # GPU Card
-        gpu_card, self.gpu_temp_label, self.gpu_name_label, self.gpu_load_bar = self._create_metric_card(
-            "🌡️ GPU Temperature",
-            "--°C",
-            "Loading..."
-        )
-        grid.addWidget(gpu_card, 0, 0)
+        # Create metric cards
+        self.gpu_card = MetricCard("🌡️ GPU Temperature")
+        self.ram_card = MetricCard("🧠 RAM Usage")
+        self.cpu_card = MetricCard("💻 CPU Load")
         
-        # RAM Card
-        ram_card, self.ram_value_label, self.ram_subtitle_label, self.ram_usage_bar = self._create_metric_card(
-            "🧠 RAM Usage",
-            "--GB",
-            "Loading..."
-        )
-        grid.addWidget(ram_card, 0, 1)
-        
-        # CPU Card
-        cpu_card, self.cpu_load_label, self.cpu_temp_label, self.cpu_load_bar = self._create_metric_card(
-            "💻 CPU Load",
-            "--%",
-            "Loading..."
-        )
-        grid.addWidget(cpu_card, 0, 2)
+        grid.addWidget(self.gpu_card, 0, 0)
+        grid.addWidget(self.ram_card, 0, 1)
+        grid.addWidget(self.cpu_card, 0, 2)
         
         layout.addLayout(grid)
         
@@ -237,57 +299,6 @@ class PartMartMainWindow(QMainWindow):
         page.setLayout(layout)
         return page
 
-    def _create_metric_card(self, title: str, value: str, subtitle: str):
-        """Create metric card and return (card, value_label, subtitle_label, progress_bar)"""
-        card = QFrame()
-        card.setFixedHeight(180)
-        card.setStyleSheet("""
-            QFrame {
-                background: #1A1A1A;
-                border-left: 4px solid #E63946;
-                border-radius: 16px;
-                padding: 20px;
-            }
-            QFrame:hover {
-                background: #252525;
-            }
-        """)
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(12)
-        
-        title_label = QLabel(title)
-        title_label.setStyleSheet("""
-            font-size: 14px;
-            font-weight: 600;
-            color: #A0A0A0;
-        """)
-        layout.addWidget(title_label)
-        
-        value_label = QLabel(value)
-        value_label.setStyleSheet("""
-            font-size: 36px;
-            font-weight: 700;
-            color: #E63946;
-        """)
-        layout.addWidget(value_label)
-        
-        subtitle_label = QLabel(subtitle)
-        subtitle_label.setStyleSheet("""
-            font-size: 12px;
-            color: #666666;
-        """)
-        layout.addWidget(subtitle_label)
-        
-        # Progress bar
-        progress = QProgressBar()
-        progress.setRange(0, 100)
-        progress.setValue(0)
-        layout.addWidget(progress)
-        
-        card.setLayout(layout)
-        return card, value_label, subtitle_label, progress
-
     def _create_system_info_card(self) -> QFrame:
         card = QFrame()
         card.setFixedHeight(120)
@@ -304,18 +315,18 @@ class PartMartMainWindow(QMainWindow):
         layout = QVBoxLayout()
         
         title = QLabel("📊 СИСТЕМНЫЕ ПОКАЗАТЕЛИ")
-        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #FFFFFF;")
+        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #FFFFFF; background: transparent;")
         layout.addWidget(title)
         
         info = QHBoxLayout()
         info.setSpacing(32)
         
         self.gpu_info_label = QLabel("GPU: Loading...")
-        self.gpu_info_label.setStyleSheet("font-size: 13px; color: #A0A0A0;")
+        self.gpu_info_label.setStyleSheet("font-size: 13px; color: #A0A0A0; background: transparent;")
         info.addWidget(self.gpu_info_label)
         
         self.cpu_info_label = QLabel("CPU: Loading...")
-        self.cpu_info_label.setStyleSheet("font-size: 13px; color: #A0A0A0;")
+        self.cpu_info_label.setStyleSheet("font-size: 13px; color: #A0A0A0; background: transparent;")
         info.addWidget(self.cpu_info_label)
         
         layout.addLayout(info)
@@ -348,6 +359,7 @@ class PartMartMainWindow(QMainWindow):
             font-size: 20px;
             font-weight: 700;
             color: #E63946;
+            background: transparent;
         """)
         layout.addWidget(title_label)
         
@@ -355,13 +367,14 @@ class PartMartMainWindow(QMainWindow):
         desc_label.setStyleSheet("""
             font-size: 13px;
             color: #A0A0A0;
+            background: transparent;
         """)
         layout.addWidget(desc_label)
         
         layout.addStretch()
         
         arrow = QLabel("→")
-        arrow.setStyleSheet("font-size: 24px; color: #E63946;")
+        arrow.setStyleSheet("font-size: 24px; color: #E63946; background: transparent;")
         arrow.setAlignment(Qt.AlignmentFlag.AlignRight)
         layout.addWidget(arrow)
         
@@ -394,11 +407,27 @@ class PartMartMainWindow(QMainWindow):
         info_layout = QVBoxLayout()
         
         self.gpu_detail_label = QLabel("Loading GPU info...")
-        self.gpu_detail_label.setStyleSheet("font-size: 16px; color: #FFFFFF;")
+        self.gpu_detail_label.setStyleSheet("font-size: 16px; color: #FFFFFF; background: transparent;")
         info_layout.addWidget(self.gpu_detail_label)
         
         self.gpu_detail_load = QProgressBar()
         self.gpu_detail_load.setRange(0, 100)
+        self.gpu_detail_load.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                background: #0D0D0D;
+                border-radius: 8px;
+                text-align: center;
+                color: white;
+                height: 24px;
+                font-weight: 600;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #E63946, stop:1 #FF4757);
+                border-radius: 8px;
+            }
+        """)
         info_layout.addWidget(self.gpu_detail_load)
         
         info_card.setLayout(info_layout)
@@ -434,35 +463,26 @@ class PartMartMainWindow(QMainWindow):
             
             # Update GPU card
             temp = gpu['temp_hotspot'] if gpu['temp_hotspot'] else gpu['temp_gpu']
-            if self.gpu_temp_label:
-                self.gpu_temp_label.setText(f"{temp}°C")
-            if self.gpu_name_label:
-                gpu_name_short = gpu['name'][:25] + "..." if len(gpu['name']) > 25 else gpu['name']
-                self.gpu_name_label.setText(gpu_name_short)
-            if self.gpu_load_bar:
-                self.gpu_load_bar.setValue(int(gpu['load_gpu']))
-                self.gpu_load_bar.setFormat(f"Load: {int(gpu['load_gpu'])}%")
+            if self.gpu_card:
+                self.gpu_card.set_value(f"{temp}°C")
+                gpu_name_short = gpu['name'][:20] + "..." if len(gpu['name']) > 20 else gpu['name']
+                self.gpu_card.set_subtitle(gpu_name_short)
+                self.gpu_card.set_progress(int(gpu['load_gpu']), f"Load: {int(gpu['load_gpu'])}%")
             
             # Update RAM card
-            if self.ram_value_label:
-                self.ram_value_label.setText(f"{ram['used']:.1f}GB")
-            if self.ram_subtitle_label:
-                self.ram_subtitle_label.setText(f"{ram['total']:.0f}GB total | {ram['speed']}MHz")
-            if self.ram_usage_bar:
-                self.ram_usage_bar.setValue(int(ram['percent']))
-                self.ram_usage_bar.setFormat(f"{int(ram['percent'])}%")
+            if self.ram_card:
+                self.ram_card.set_value(f"{ram['used']:.1f}GB")
+                self.ram_card.set_subtitle(f"{ram['total']:.0f}GB total | {ram['speed']}MHz")
+                self.ram_card.set_progress(int(ram['percent']), f"{int(ram['percent'])}%")
             
             # Update CPU card
-            if self.cpu_load_label:
-                self.cpu_load_label.setText(f"{cpu['load']:.0f}%")
-            if self.cpu_temp_label:
+            if self.cpu_card:
+                self.cpu_card.set_value(f"{cpu['load']:.0f}%")
                 if cpu['temp']:
-                    self.cpu_temp_label.setText(f"Temp: {cpu['temp']:.0f}°C | {cpu['count']} cores")
+                    self.cpu_card.set_subtitle(f"Temp: {cpu['temp']:.0f}°C | {cpu['count']} cores")
                 else:
-                    self.cpu_temp_label.setText(f"{cpu['count']} cores | {cpu['freq']:.0f}MHz")
-            if self.cpu_load_bar:
-                self.cpu_load_bar.setValue(int(cpu['load']))
-                self.cpu_load_bar.setFormat(f"{int(cpu['load'])}%")
+                    self.cpu_card.set_subtitle(f"{cpu['count']} cores | {cpu['freq']:.0f}MHz")
+                self.cpu_card.set_progress(int(cpu['load']), f"Load: {int(cpu['load'])}%")
             
             # System info card
             if hasattr(self, 'gpu_info_label'):
@@ -483,6 +503,8 @@ class PartMartMainWindow(QMainWindow):
                 
         except Exception as e:
             print(f"Error updating UI: {e}")
+            import traceback
+            traceback.print_exc()
 
     def closeEvent(self, event):
         self.update_timer.stop()
