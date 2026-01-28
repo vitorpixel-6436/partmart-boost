@@ -693,51 +693,79 @@ class PartMartMainWindow(QMainWindow):
                 QMessageBox.critical(self, t('error'), t('optimization_failed'))
 
     def _update_system_data(self):
-        """Update system metrics"""
+        """Update system metrics with safe None handling"""
         try:
             # GPU
             gpu_data = self.system_monitor.get_gpu_data()
             if gpu_data:
-                temp = gpu_data.get('temperature', 0)
-                load = gpu_data.get('load', 0)
-                self.gpu_card.set_value(f"{temp}°C")
-                self.gpu_card.set_subtitle(f"{gpu_data.get('name', 'N/A')}")
-                self.gpu_card.set_progress(int(temp), f"{temp}°C")
+                # Safe get with defaults
+                temp = gpu_data.get('temperature') or gpu_data.get('temp_gpu') or 0
+                load = gpu_data.get('load') or gpu_data.get('load_gpu') or 0
+                clock = gpu_data.get('clock') or gpu_data.get('clock_gpu') or 0
+                name = gpu_data.get('name', 'N/A')
+                
+                # Convert to int safely
+                temp = int(temp) if temp else 0
+                load = int(load) if load else 0
+                clock = int(clock) if clock else 0
+                
+                self.gpu_card.set_value(f"{temp}°C" if temp > 0 else "--")
+                self.gpu_card.set_subtitle(name)
+                self.gpu_card.set_progress(min(temp, 100), f"{temp}°C" if temp > 0 else "--")
                 
                 self.gpu_info_label.setText(
-                    f"GPU: {gpu_data.get('name', 'N/A')} | "
-                    f"{t('clock')}: {gpu_data.get('clock', 0)} MHz"
+                    f"GPU: {name} | "
+                    f"{t('clock') if hasattr(self, 'config') else 'Clock'}: {clock} MHz"
                 )
             
             # RAM
             ram_data = self.system_monitor.get_ram_data()
             if ram_data:
-                used = ram_data.get('used_gb', 0)
-                total = ram_data.get('total_gb', 0)
+                used = ram_data.get('used_gb') or ram_data.get('used', 0) / (1024**3)
+                total = ram_data.get('total_gb') or ram_data.get('total', 0) / (1024**3)
                 percent = ram_data.get('percent', 0)
-                self.ram_card.set_value(f"{percent}%")
-                self.ram_card.set_subtitle(f"{used:.1f} / {total:.1f} GB")
-                self.ram_card.set_progress(int(percent), f"{percent}%")
+                
+                # Convert to numbers safely
+                used = float(used) if used else 0
+                total = float(total) if total else 0
+                percent = int(percent) if percent else 0
+                
+                self.ram_card.set_value(f"{percent}%" if percent > 0 else "--")
+                self.ram_card.set_subtitle(f"{used:.1f} / {total:.1f} GB" if total > 0 else "--")
+                self.ram_card.set_progress(percent, f"{percent}%" if percent > 0 else "--")
             
             # CPU
             cpu_data = self.system_monitor.get_cpu_data()
             if cpu_data:
                 load = cpu_data.get('load', 0)
                 cores = cpu_data.get('cores', 0)
-                self.cpu_card.set_value(f"{load}%")
-                self.cpu_card.set_subtitle(t('cpu_cores', count=cores))
-                self.cpu_card.set_progress(int(load), f"{load}%")
+                name = cpu_data.get('name', 'N/A')
+                
+                # Convert safely
+                load = int(load) if load else 0
+                cores = int(cores) if cores else 0
+                
+                self.cpu_card.set_value(f"{load}%" if load > 0 else "--")
+                self.cpu_card.set_subtitle(
+                    t('cpu_cores', count=cores) if hasattr(self, 'config') and cores > 0 
+                    else f"{cores} cores" if cores > 0 else "--"
+                )
+                self.cpu_card.set_progress(load, f"{load}%" if load > 0 else "--")
                 
                 self.cpu_info_label.setText(
-                    f"CPU: {cpu_data.get('name', 'N/A')} | "
-                    f"{t('load')}: {load}%"
+                    f"CPU: {name} | "
+                    f"{t('load') if hasattr(self, 'config') else 'Load'}: {load}%"
                 )
             
             # Update info card title
-            self.info_title.setText(f"📊 {t('system_metrics')}")
+            self.info_title.setText(
+                f"📊 {t('system_metrics') if hasattr(self, 'config') else 'System Metrics'}"
+            )
         
         except Exception as e:
-            self.logger.error(f"Failed to update system data: {e}")
+            print(f"ERROR: Failed to update system data: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _update_game_detection(self):
         """Update game detection"""
