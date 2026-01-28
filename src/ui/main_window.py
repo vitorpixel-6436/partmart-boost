@@ -13,6 +13,14 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 import sys
 
+# Correcting relative imports for the package structure
+try:
+    from .ai_widget import PartMartAIWidget
+    from ..ai_optimizer import PartMartAIOptimizer
+except ImportError:
+    # Fallback for direct execution
+    from ai_widget import PartMartAIWidget
+    from ai_optimizer import PartMartAIOptimizer
 
 class PartMartMainWindow(QMainWindow):
     """Steam-like main window for PartMart Boost"""
@@ -22,11 +30,13 @@ class PartMartMainWindow(QMainWindow):
         self.setWindowTitle("🐉 PartMart Boost")
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(1000, 600)
-
+        
+        self.ai_engine = PartMartAIOptimizer()
         self.nav_button_group = []
-
+        
         self._load_theme()
         self._setup_ui()
+        self._initial_analysis()
 
     def _load_theme(self) -> None:
         """Load QSS theme"""
@@ -51,8 +61,9 @@ class PartMartMainWindow(QMainWindow):
         self.content_stack = QStackedWidget()
         self.content_stack.setStyleSheet("background: #1B2838;")
 
+        # Pages
         self.page_home = self._create_home_page()
-        self.page_gpu = QLabel("GPU PAGE (TODO)")
+        self.page_gpu = self._create_gpu_page()
         self.page_ram = QLabel("RAM PAGE (TODO)")
         self.page_framegen = QLabel("FRAMEGEN PAGE (TODO)")
         self.page_games = QLabel("GAMES PAGE (TODO)")
@@ -71,6 +82,11 @@ class PartMartMainWindow(QMainWindow):
         main_layout.addWidget(self.content_stack)
         central.setLayout(main_layout)
 
+    def _initial_analysis(self):
+        sample_data = {"gpu_temp": 55, "ram_usage_percent": 90, "cpu_load": 45, "current_fps": 120}
+        report = self.ai_engine.analyze_system(sample_data)
+        pass
+
     def _create_sidebar(self) -> QFrame:
         sidebar = QFrame()
         sidebar.setFixedWidth(220)
@@ -78,10 +94,10 @@ class PartMartMainWindow(QMainWindow):
             """
             QFrame {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #2A475E, stop:1 #1B2838);
+                stop:0 #2A475E, stop:1 #1B2838);
                 border-right: 2px solid #2A475E;
             }
-        """
+            """
         )
 
         layout = QVBoxLayout()
@@ -132,7 +148,7 @@ class PartMartMainWindow(QMainWindow):
         return sidebar
 
     def _create_nav_button(self, emoji: str, text: str, index: int) -> QPushButton:
-        btn = QPushButton(f"{emoji}  {text}")
+        btn = QPushButton(f"{emoji} {text}")
         btn.setFixedHeight(50)
         btn.setStyleSheet(
             """
@@ -152,10 +168,10 @@ class PartMartMainWindow(QMainWindow):
             }
             QPushButton:pressed {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                            stop:0 #E63946, stop:1 #C11F28);
+                stop:0 #E63946, stop:1 #C11F28);
                 color: white;
             }
-        """
+            """
         )
         btn.clicked.connect(lambda: self._switch_page(index))
         return btn
@@ -167,7 +183,7 @@ class PartMartMainWindow(QMainWindow):
                     """
                     QPushButton {
                         background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                    stop:0 #E63946, stop:1 #C11F28);
+                        stop:0 #E63946, stop:1 #C11F28);
                         color: white;
                         border: none;
                         border-radius: 6px;
@@ -176,7 +192,7 @@ class PartMartMainWindow(QMainWindow):
                         font-size: 14px;
                         font-weight: 600;
                     }
-                """
+                    """
                 )
             else:
                 btn.setStyleSheet(
@@ -195,9 +211,8 @@ class PartMartMainWindow(QMainWindow):
                         background: #2A475E;
                         color: white;
                     }
-                """
+                    """
                 )
-
         self.content_stack.setCurrentIndex(index)
 
     def _create_home_page(self) -> QWidget:
@@ -217,20 +232,32 @@ class PartMartMainWindow(QMainWindow):
         layout.addWidget(subtitle)
 
         layout.addSpacing(20)
-
         status_card = self._create_status_card()
         layout.addWidget(status_card)
 
         layout.addSpacing(20)
-
         boost_card = self._create_quick_boost_card()
         layout.addWidget(boost_card)
 
+        layout.addStretch()
+        page.setLayout(layout)
+        return page
+
+    def _create_gpu_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(40, 40, 40, 40)
+        
+        title = QLabel("⚡ GPU CONTROL")
+        title.setStyleSheet("font-size: 28px; font-weight: 700; color: white;")
+        layout.addWidget(title)
+        
+        # Adding AI Insights to GPU page
         layout.addSpacing(20)
-
-        results_card = self._create_results_card()
-        layout.addWidget(results_card)
-
+        ai_insights = PartMartAIWidget()
+        ai_insights.update_insights(self.ai_engine.analyze_system({"gpu_temp": 75, "ram_usage_percent": 45}))
+        layout.addWidget(ai_insights)
+        
         layout.addStretch()
         page.setLayout(layout)
         return page
@@ -243,22 +270,19 @@ class PartMartMainWindow(QMainWindow):
             """
             QFrame#card {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #2A475E, stop:1 #1B2838);
+                stop:0 #2A475E, stop:1 #1B2838);
                 border: 2px solid #2A475E;
                 border-radius: 12px;
                 padding: 24px;
             }
-        """
+            """
         )
-
         layout = QVBoxLayout()
-
         title = QLabel("💻 СТАТУС СИСТЕМЫ")
         title.setStyleSheet(
             "font-size: 18px; font-weight: 600; color: #66C0F4;"
         )
         layout.addWidget(title)
-
         layout.addSpacing(12)
 
         gpu_label = QLabel("🎮 GPU: NVIDIA RTX 3060 (stock settings)")
@@ -284,15 +308,13 @@ class PartMartMainWindow(QMainWindow):
             """
             QFrame {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                            stop:0 #E63946, stop:1 #C11F28);
+                stop:0 #E63946, stop:1 #C11F28);
                 border-radius: 12px;
                 padding: 32px;
             }
-        """
+            """
         )
-
         layout = QVBoxLayout()
-
         title = QLabel("⚡ БЫСТРЫЙ БУСТ")
         title.setStyleSheet(
             """
@@ -300,7 +322,7 @@ class PartMartMainWindow(QMainWindow):
             font-weight: 700;
             color: white;
             text-transform: uppercase;
-        """
+            """
         )
         layout.addWidget(title)
 
@@ -309,7 +331,6 @@ class PartMartMainWindow(QMainWindow):
         layout.addWidget(desc)
 
         layout.addSpacing(12)
-
         expected = QLabel("📈 Ожидаемый прирост: +40-60 FPS")
         expected.setStyleSheet(
             "font-size: 16px; font-weight: 600; color: white;"
@@ -317,7 +338,6 @@ class PartMartMainWindow(QMainWindow):
         layout.addWidget(expected)
 
         layout.addSpacing(16)
-
         boost_btn = QPushButton("ЗАПУСТИТЬ ОПТИМИЗАЦИЮ")
         boost_btn.setFixedHeight(60)
         boost_btn.setStyleSheet(
@@ -338,67 +358,16 @@ class PartMartMainWindow(QMainWindow):
             QPushButton:pressed {
                 background: #E0E0E0;
             }
-        """
+            """
         )
         layout.addWidget(boost_btn)
-
         card.setLayout(layout)
         return card
-
-    def _create_results_card(self) -> QFrame:
-        card = QFrame()
-        card.setFixedHeight(200)
-        card.setStyleSheet(
-            """
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #2A475E, stop:1 #1B2838);
-                border: 2px solid #2A475E;
-                border-radius: 12px;
-                padding: 24px;
-            }
-        """
-        )
-
-        layout = QVBoxLayout()
-
-        title = QLabel("📊 ПОСЛЕДНИЙ РЕЗУЛЬТАТ")
-        title.setStyleSheet(
-            "font-size: 18px; font-weight: 600; color: #66C0F4;"
-        )
-        layout.addWidget(title)
-
-        layout.addSpacing(12)
-
-        game_label = QLabel("🎮 Игра: Valorant (Competitive)")
-        game_label.setStyleSheet("font-size: 14px; color: white;")
-        layout.addWidget(game_label)
-
-        fps_label = QLabel("📈 FPS: 89 → 142 (+60%)")
-        fps_label.setStyleSheet(
-            "font-size: 16px; font-weight: 600; color: #5DA130;"
-        )
-        layout.addWidget(fps_label)
-
-        temp_label = QLabel("🌡️ Температура: 76°C → 68°C (-8°C)")
-        temp_label.setStyleSheet("font-size: 14px; color: #66C0F4;")
-        layout.addWidget(temp_label)
-
-        low_label = QLabel("📉 1% Low: 52 → 98 FPS (плавнее в 2x)")
-        low_label.setStyleSheet("font-size: 14px; color: white;")
-        layout.addWidget(low_label)
-
-        layout.addStretch()
-        card.setLayout(layout)
-        return card
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     font = QFont("Segoe UI", 10)
     app.setFont(font)
-
     window = PartMartMainWindow()
     window.show()
-
     sys.exit(app.exec())
