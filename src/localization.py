@@ -87,23 +87,26 @@ class Localization:
             # Settings Dialog
             'settings_title': 'Settings',
             'language': 'Language',
-            'select_language': 'Interface language:',
+            'select_language': 'Interface language',
             'auto_detect': 'Auto-detect',
-            'language_restart_required': 'Language change requires application restart',
+            'language_change_note': 'Changes take effect immediately',
+            'language_changed_title': 'Language Changed',
+            'language_changed_msg': 'Interface language has been updated.',
             
             'ml_optimizer': 'ML Optimizer (Beta)',
             'enable_ml': 'Enable AI-powered optimization',
             'ml_beta_warning': 'Beta feature: May consume up to 50MB RAM',
-            'ml_info': 'Local machine learning model that learns optimal GPU/RAM settings from your usage patterns. Completely offline.',
+            'ml_info': 'Learn optimal settings from your usage',
+            'ml_local': 'Works 100% offline',
+            'ml_lightweight': 'Uses <50MB RAM',
+            'ml_learns': 'Learns from each optimization',
             
             'performance': 'Performance',
-            'update_interval': 'System monitoring update interval:',
-            'update_interval_info': 'Lower values = more frequent updates, higher CPU usage',
+            'update_interval': 'Update interval',
+            'interval_hint': 'Lower = more updates, higher CPU usage',
             
             'save': 'Save',
             'cancel': 'Cancel',
-            'restart_required': 'Restart Required',
-            'restart_required_message': 'Please restart PartMart Boost for language changes to take effect.',
         },
         'ru': {
             # Window
@@ -181,23 +184,26 @@ class Localization:
             # Settings Dialog
             'settings_title': 'Настройки',
             'language': 'Язык',
-            'select_language': 'Язык интерфейса:',
+            'select_language': 'Язык интерфейса',
             'auto_detect': 'Автоопределение',
-            'language_restart_required': 'Изменение языка требует перезапуска приложения',
+            'language_change_note': 'Изменения применяются немедленно',
+            'language_changed_title': 'Язык изменён',
+            'language_changed_msg': 'Язык интерфейса обновлён.',
             
             'ml_optimizer': 'ML Оптимизатор (Beta)',
             'enable_ml': 'Включить оптимизацию на основе ИИ',
             'ml_beta_warning': 'Beta-функция: может использовать до 50MB RAM',
-            'ml_info': 'Локальная модель машинного обучения, которая изучает оптимальные настройки GPU/RAM на основе ваших паттернов использования. Работает полностью офлайн.',
+            'ml_info': 'Изучает оптимальные настройки из вашего использования',
+            'ml_local': 'Работает 100% офлайн',
+            'ml_lightweight': 'Использует <50MB RAM',
+            'ml_learns': 'Учится на каждой оптимизации',
             
             'performance': 'Производительность',
-            'update_interval': 'Интервал обновления мониторинга системы:',
-            'update_interval_info': 'Меньшие значения = более частые обновления, но выше нагрузка на CPU',
+            'update_interval': 'Интервал обновления',
+            'interval_hint': 'Меньше = чаще обновления, выше нагрузка на CPU',
             
             'save': 'Сохранить',
             'cancel': 'Отмена',
-            'restart_required': 'Требуется перезапуск',
-            'restart_required_message': 'Пожалуйста, перезапустите PartMart Boost для применения изменений языка.',
         }
     }
     
@@ -260,6 +266,10 @@ def get_localization() -> Localization:
     if _localization is None:
         _localization = Localization()
     return _localization
+
+def get_current_language() -> str:
+    """Get current language code"""
+    return get_localization().get_current_language()
 
 def set_language(language: str):
     """Set global language"""
