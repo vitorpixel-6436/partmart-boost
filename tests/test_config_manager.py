@@ -1,180 +1,217 @@
 #!/usr/bin/env python3
-"""ConfigManager Unit Tests
+"""Tests for ConfigManager
 
-Version: 0.3.5i (package 3.9a, stage 7.7a/7.7)
+Version: 0.3.5g (package 3.9a, stage 7.7b.9.1/7.7b.9)
 """
-import sys
-import os
 import unittest
 import tempfile
-import json
+import os
+from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'core'))
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from config_manager import ConfigManager, ConfigSchema
+from core.config_manager import (
+    ConfigManager,
+    ApplicationConfig,
+    MonitoringConfig,
+    HistoricalDataConfig,
+    VisualizationConfig,
+    UIConfig
+)
 
 
 class TestConfigManager(unittest.TestCase):
-    """Test ConfigManager functionality"""
+    """Test ConfigManager"""
     
     def setUp(self):
         """Set up test fixtures"""
-        self.temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        # Create temporary config file
+        self.temp_file = tempfile.NamedTemporaryFile(
+            mode='w',
+            delete=False,
+            suffix='.json'
+        )
+        self.config_path = self.temp_file.name
         self.temp_file.close()
-        self.config = ConfigManager(self.temp_file.name)
+        
+        self.config_manager = ConfigManager(self.config_path)
     
     def tearDown(self):
         """Clean up test fixtures"""
-        if os.path.exists(self.temp_file.name):
-            os.remove(self.temp_file.name)
+        if os.path.exists(self.config_path):
+            os.unlink(self.config_path)
     
-    def test_get_default_value(self):
-        """Test getting default values"""
-        theme = self.config.get('ui.theme')
-        self.assertEqual(theme, 'dark')
-        
-        interval = self.config.get('monitor.interval_ms')
-        self.assertEqual(interval, 100)
+    def test_initialization(self):
+        """Test config manager initialization"""
+        self.assertIsNotNone(self.config_manager)
+        self.assertIsInstance(self.config_manager.config, ApplicationConfig)
     
-    def test_get_with_fallback(self):
-        """Test getting non-existent key with fallback"""
-        value = self.config.get('nonexistent.key', 'fallback')
-        self.assertEqual(value, 'fallback')
+    def test_default_config(self):
+        """Test default configuration values"""
+        config = self.config_manager.load()
+        
+        self.assertEqual(config.version, "0.3.5g")
+        self.assertEqual(config.package, "3.9a")
+        self.assertIsInstance(config.monitoring, MonitoringConfig)
+        self.assertIsInstance(config.historical_data, HistoricalDataConfig)
+        self.assertIsInstance(config.visualization, VisualizationConfig)
+        self.assertIsInstance(config.ui, UIConfig)
     
-    def test_set_and_get(self):
-        """Test setting and getting values"""
-        self.config.set('ui.theme', 'light')
-        theme = self.config.get('ui.theme')
-        self.assertEqual(theme, 'light')
+    def test_monitoring_config_defaults(self):
+        """Test monitoring config defaults"""
+        config = self.config_manager.load()
+        
+        self.assertEqual(config.monitoring.check_interval, 5.0)
+        self.assertTrue(config.monitoring.enable_performance_monitoring)
+        self.assertTrue(config.monitoring.enable_auto_recovery)
     
-    def test_validation_type_error(self):
-        """Test type validation"""
-        result = self.config.set('ui.theme', 123)  # Should be str
-        self.assertFalse(result)
+    def test_historical_data_config_defaults(self):
+        """Test historical data config defaults"""
+        config = self.config_manager.load()
         
-        # Value should not change
-        theme = self.config.get('ui.theme')
-        self.assertEqual(theme, 'dark')
+        self.assertTrue(config.historical_data.enabled)
+        self.assertEqual(config.historical_data.retention_days, 30)
+        self.assertEqual(config.historical_data.collection_interval, 60.0)
     
-    def test_validation_choice_error(self):
-        """Test choice validation"""
-        result = self.config.set('ui.theme', 'red')  # Not in choices
-        self.assertFalse(result)
-    
-    def test_validation_range_error(self):
-        """Test range validation"""
-        result = self.config.set('monitor.interval_ms', 10000)  # Exceeds max
-        self.assertFalse(result)
+    def test_ui_config_defaults(self):
+        """Test UI config defaults"""
+        config = self.config_manager.load()
         
-        result = self.config.set('monitor.interval_ms', 5)  # Below min
-        self.assertFalse(result)
-    
-    def test_validation_success(self):
-        """Test successful validation"""
-        result = self.config.set('monitor.interval_ms', 200)
-        self.assertTrue(result)
-        
-        interval = self.config.get('monitor.interval_ms')
-        self.assertEqual(interval, 200)
-    
-    def test_get_section(self):
-        """Test getting config section"""
-        ui_config = self.config.get_section('ui')
-        
-        self.assertIn('ui.theme', ui_config)
-        self.assertIn('ui.language', ui_config)
-        self.assertIn('ui.show_fps', ui_config)
-    
-    def test_get_all_keys(self):
-        """Test getting all keys"""
-        keys = self.config.get_all_keys()
-        
-        self.assertIsInstance(keys, list)
-        self.assertIn('ui.theme', keys)
-        self.assertIn('monitor.interval_ms', keys)
-    
-    def test_subscribe(self):
-        """Test subscription to changes"""
-        callback_called = []
-        
-        def on_change(key, value):
-            callback_called.append((key, value))
-        
-        self.config.subscribe('ui.theme', on_change)
-        self.config.set('ui.theme', 'light')
-        
-        self.assertEqual(len(callback_called), 1)
-        self.assertEqual(callback_called[0], ('ui.theme', 'light'))
-    
-    def test_subscribe_wildcard(self):
-        """Test wildcard subscription"""
-        callback_called = []
-        
-        def on_change(key, value):
-            callback_called.append(key)
-        
-        self.config.subscribe('ui.*', on_change)
-        
-        self.config.set('ui.theme', 'light')
-        self.config.set('ui.language', 'ru')
-        self.config.set('monitor.interval_ms', 200)  # Should not trigger
-        
-        self.assertEqual(len(callback_called), 2)
-        self.assertIn('ui.theme', callback_called)
-        self.assertIn('ui.language', callback_called)
-        self.assertNotIn('monitor.interval_ms', callback_called)
+        self.assertEqual(config.ui.window_width, 1200)
+        self.assertEqual(config.ui.window_height, 800)
+        self.assertEqual(config.ui.theme, "light")
     
     def test_save_and_load(self):
-        """Test saving and loading config"""
-        # Set some values
-        self.config.set('ui.theme', 'light')
-        self.config.set('monitor.interval_ms', 200)
+        """Test saving and loading configuration"""
+        # Modify config
+        self.config_manager.set('monitoring.check_interval', 10.0)
+        self.config_manager.set('ui.window_width', 1600)
         
         # Save
-        self.config.save()
+        self.assertTrue(self.config_manager.save())
         
-        # Create new config and load
-        config2 = ConfigManager(self.temp_file.name)
+        # Load in new manager
+        new_manager = ConfigManager(self.config_path)
+        config = new_manager.load()
         
-        # Check values
-        self.assertEqual(config2.get('ui.theme'), 'light')
-        self.assertEqual(config2.get('monitor.interval_ms'), 200)
+        self.assertEqual(config.monitoring.check_interval, 10.0)
+        self.assertEqual(config.ui.window_width, 1600)
     
-    def test_reset_single_key(self):
-        """Test resetting single key"""
-        self.config.set('ui.theme', 'light')
-        self.assertEqual(self.config.get('ui.theme'), 'light')
+    def test_get_value(self):
+        """Test getting configuration values"""
+        config = self.config_manager.load()
         
-        self.config.reset('ui.theme')
-        self.assertEqual(self.config.get('ui.theme'), 'dark')
+        # Get nested values
+        check_interval = self.config_manager.get('monitoring.check_interval')
+        self.assertEqual(check_interval, 5.0)
+        
+        window_width = self.config_manager.get('ui.window_width')
+        self.assertEqual(window_width, 1200)
+        
+        # Get with default
+        unknown = self.config_manager.get('unknown.key', 'default')
+        self.assertEqual(unknown, 'default')
     
-    def test_reset_all(self):
-        """Test resetting all config"""
-        self.config.set('ui.theme', 'light')
-        self.config.set('monitor.interval_ms', 200)
+    def test_set_value(self):
+        """Test setting configuration values"""
+        # Set values
+        self.assertTrue(self.config_manager.set('monitoring.check_interval', 15.0))
+        self.assertTrue(self.config_manager.set('ui.theme', 'dark'))
         
-        self.config.reset()
+        # Verify
+        self.assertEqual(
+            self.config_manager.get('monitoring.check_interval'),
+            15.0
+        )
+        self.assertEqual(self.config_manager.get('ui.theme'), 'dark')
         
-        self.assertEqual(self.config.get('ui.theme'), 'dark')
-        self.assertEqual(self.config.get('monitor.interval_ms'), 100)
+        # Try to set invalid key
+        self.assertFalse(self.config_manager.set('invalid.key', 'value'))
     
-    def test_to_dict(self):
-        """Test exporting to dictionary"""
-        config_dict = self.config.to_dict()
+    def test_reset_to_defaults(self):
+        """Test resetting to default configuration"""
+        # Modify config
+        self.config_manager.set('monitoring.check_interval', 20.0)
+        
+        # Reset
+        self.config_manager.reset_to_defaults()
+        
+        # Verify defaults restored
+        self.assertEqual(
+            self.config_manager.config.monitoring.check_interval,
+            5.0
+        )
+    
+    def test_get_config_dict(self):
+        """Test getting configuration as dictionary"""
+        config_dict = self.config_manager.get_config_dict()
         
         self.assertIsInstance(config_dict, dict)
+        self.assertIn('version', config_dict)
+        self.assertIn('monitoring', config_dict)
+        self.assertIn('historical_data', config_dict)
         self.assertIn('ui', config_dict)
-        self.assertIn('monitor', config_dict)
     
-    def test_get_schema(self):
-        """Test getting schema"""
-        schema = self.config.get_schema('ui.theme')
+    def test_visualization_config_defaults(self):
+        """Test visualization config defaults"""
+        config = self.config_manager.load()
         
-        self.assertIsInstance(schema, ConfigSchema)
-        self.assertEqual(schema.type, str)
-        self.assertEqual(schema.default, 'dark')
+        self.assertTrue(config.visualization.enabled)
+        self.assertEqual(config.visualization.default_time_range, "Last 24 Hours")
+        self.assertTrue(config.visualization.auto_refresh)
+        self.assertIsInstance(config.visualization.chart_colors, list)
+
+
+class TestDataClasses(unittest.TestCase):
+    """Test configuration data classes"""
+    
+    def test_monitoring_config(self):
+        """Test MonitoringConfig dataclass"""
+        config = MonitoringConfig(
+            check_interval=10.0,
+            enable_auto_recovery=False
+        )
+        
+        self.assertEqual(config.check_interval, 10.0)
+        self.assertFalse(config.enable_auto_recovery)
+        self.assertEqual(config.error_threshold, 10)  # Default
+    
+    def test_historical_data_config(self):
+        """Test HistoricalDataConfig dataclass"""
+        config = HistoricalDataConfig(
+            retention_days=60,
+            collection_interval=30.0
+        )
+        
+        self.assertEqual(config.retention_days, 60)
+        self.assertEqual(config.collection_interval, 30.0)
+        self.assertTrue(config.enabled)  # Default
+    
+    def test_ui_config(self):
+        """Test UIConfig dataclass"""
+        config = UIConfig(
+            window_width=1920,
+            window_height=1080,
+            theme="dark"
+        )
+        
+        self.assertEqual(config.window_width, 1920)
+        self.assertEqual(config.window_height, 1080)
+        self.assertEqual(config.theme, "dark")
+    
+    def test_application_config(self):
+        """Test ApplicationConfig dataclass"""
+        config = ApplicationConfig()
+        
+        self.assertEqual(config.version, "0.3.5g")
+        self.assertEqual(config.package, "3.9a")
+        self.assertIsInstance(config.monitoring, MonitoringConfig)
+        self.assertIsInstance(config.historical_data, HistoricalDataConfig)
+        self.assertIsInstance(config.visualization, VisualizationConfig)
+        self.assertIsInstance(config.ui, UIConfig)
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2)
