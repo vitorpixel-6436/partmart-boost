@@ -1,183 +1,417 @@
-"""Error handling and graceful degradation for PartMart Boost"""
+#!/usr/bin/env python3
+"""Error Handler
+
+Version: 0.3.5j (package 3.9a, stage 7.7b/7.7)
+
+Package 3.9a Stage 7.7b: Error handling and robustness.
+
+Features:
+- Centralized error handling
+- Error recovery strategies
+- Graceful degradation
+- Error reporting
+- Context preservation
+"""
 import sys
 import traceback
-from typing import Optional, Callable, Any
-from functools import wraps
+import threading
+from typing import Optional, Callable, Any, Dict
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
 
-try:
-    from core.logger import get_logger
-    LOGGER_AVAILABLE = True
-except ImportError:
-    LOGGER_AVAILABLE = False
+
+class ErrorSeverity(Enum):
+    """Error severity levels"""
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+    CRITICAL = 4
+
+
+@dataclass
+class ErrorContext:
+    """Error context information"""
+    component: str
+    operation: str
+    severity: ErrorSeverity
+    error_type: str
+    error_message: str
+    traceback: Optional[str]
+    timestamp: datetime
+    thread_id: int
+    recoverable: bool = True
+    recovery_attempted: bool = False
+    recovery_successful: bool = False
+
 
 class ErrorHandler:
-    """Centralized error handling with graceful degradation"""
+    """Centralized Error Handler
     
-    def __init__(self):
-        self.logger = get_logger() if LOGGER_AVAILABLE else None
-        self.error_count = 0
-        self.max_errors = 100  # Prevent error spam
+    v0.3.5j (package 3.9a, stage 7.7b/7.7)
     
-    def handle_error(self, error: Exception, context: str = "", critical: bool = False) -> None:
-        """Handle error with logging and optional user notification"""
-        self.error_count += 1
+    Features:
+    - Error capturing and logging
+    - Recovery strategies
+    - Error callbacks
+    - Statistics tracking
+    
+    Usage:
+        >>> handler = ErrorHandler()
+        >>> 
+        >>> try:
+        ...     risky_operation()
+        >>> except Exception as e:
+        ...     handler.handle_error(
+        ...         component='ComponentName',
+        ...         operation='operation_name',
+        ...         error=e,
+        ...         severity=ErrorSeverity.ERROR,
+        ...         recoverable=True
+        ...     )
+    """
+    
+    _instance: Optional['ErrorHandler'] = None
+    _lock = threading.Lock()
+    
+    def __init__(self, max_errors: int = 1000):
+        """Initialize error handler
         
-        error_msg = f"{context}: {str(error)}" if context else str(error)
+        Args:
+            max_errors: Maximum errors to keep in history
+        """
+        self._errors: list[ErrorContext] = []
+        self._max_errors = max_errors
+        self._callbacks: list[Callable[[ErrorContext], None]] = []
+        self._recovery_strategies: Dict[str, Callable] = {}
+        self._stats = {
+            'total_errors': 0,
+            'by_severity': {s: 0 for s in ErrorSeverity},
+            'by_component': {},
+            'recoveries_attempted': 0,
+            'recoveries_successful': 0,
+        }
+        self._lock_errors = threading.RLock()
+    
+    @classmethod
+    def get_instance(cls) -> 'ErrorHandler':
+        """Get singleton instance"""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+        return cls._instance
+    
+    def handle_error(
+        self,
+        component: str,
+        operation: str,
+        error: Exception,
+        severity: ErrorSeverity = ErrorSeverity.ERROR,
+        recoverable: bool = True,
+        context: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Handle an error
         
-        # Log error
-        if self.logger:
-            if critical:
-                self.logger.critical(error_msg, exc_info=True)
+        Args:
+            component: Component name
+            operation: Operation name
+            error: Exception object
+            severity: Error severity
+            recoverable: Whether error is recoverable
+            context: Additional context
+        
+        Returns:
+            True if error was handled successfully
+        """
+        # Create error context
+        error_ctx = ErrorContext(
+            component=component,
+            operation=operation,
+            severity=severity,
+            error_type=type(error).__name__,
+            error_message=str(error),
+            traceback=traceback.format_exc() if severity >= ErrorSeverity.ERROR else None,
+            timestamp=datetime.now(),
+            thread_id=threading.get_ident(),
+            recoverable=recoverable
+        )
+        
+        # Store error
+        with self._lock_errors:
+            self._errors.append(error_ctx)
+            if len(self._errors) > self._max_errors:
+                self._errors.pop(0)
+            
+            # Update statistics
+            self._stats['total_errors'] += 1
+            self._stats['by_severity'][severity] += 1
+            
+            if component not in self._stats['by_component']:
+                self._stats['by_component'][component] = 0
+            self._stats['by_component'][component] += 1
+        
+        # Print error
+        self._print_error(error_ctx)
+        
+        # Notify callbacks
+        self._notify_callbacks(error_ctx)
+        
+        # Attempt recovery if possible
+        if recoverable:
+            return self._attempt_recovery(error_ctx, context)
+        
+        return False
+    
+    def _print_error(self, ctx: ErrorContext):
+        """Print error to console"""
+        severity_icons = {
+            ErrorSeverity.DEBUG: '🔍',
+            ErrorSeverity.INFO: 'ℹ️',
+            ErrorSeverity.WARNING: '⚠️',
+            ErrorSeverity.ERROR: '❌',
+            ErrorSeverity.CRITICAL: '🔥',
+        }
+        
+        icon = severity_icons.get(ctx.severity, '❓')
+        timestamp = ctx.timestamp.strftime('%H:%M:%S.%f')[:-3]
+        
+        print(f"{icon} [{timestamp}] {ctx.severity.name}: {ctx.component}.{ctx.operation}")
+        print(f"   {ctx.error_type}: {ctx.error_message}")
+        
+        if ctx.traceback and ctx.severity >= ErrorSeverity.ERROR:
+            print(f"   Traceback:")
+            for line in ctx.traceback.split('\n')[-5:]:
+                if line.strip():
+                    print(f"      {line}")
+    
+    def _notify_callbacks(self, ctx: ErrorContext):
+        """Notify error callbacks"""
+        for callback in self._callbacks:
+            try:
+                callback(ctx)
+            except Exception as e:
+                print(f"Error in error callback: {e}")
+    
+    def _attempt_recovery(self, ctx: ErrorContext, context: Optional[Dict[str, Any]]) -> bool:
+        """Attempt error recovery
+        
+        Args:
+            ctx: Error context
+            context: Additional context
+        
+        Returns:
+            True if recovery successful
+        """
+        ctx.recovery_attempted = True
+        self._stats['recoveries_attempted'] += 1
+        
+        # Try component-specific recovery
+        recovery_key = f"{ctx.component}.{ctx.operation}"
+        if recovery_key in self._recovery_strategies:
+            try:
+                recovery_func = self._recovery_strategies[recovery_key]
+                result = recovery_func(ctx, context)
+                
+                if result:
+                    ctx.recovery_successful = True
+                    self._stats['recoveries_successful'] += 1
+                    print(f"   ✅ Recovery successful")
+                    return True
+            
+            except Exception as e:
+                print(f"   ❌ Recovery failed: {e}")
+        
+        return False
+    
+    def register_recovery_strategy(
+        self,
+        component: str,
+        operation: str,
+        strategy: Callable[[ErrorContext, Optional[Dict]], bool]
+    ):
+        """Register recovery strategy
+        
+        Args:
+            component: Component name
+            operation: Operation name
+            strategy: Recovery function
+        """
+        key = f"{component}.{operation}"
+        self._recovery_strategies[key] = strategy
+    
+    def add_callback(self, callback: Callable[[ErrorContext], None]):
+        """Add error callback
+        
+        Args:
+            callback: Callback function
+        """
+        self._callbacks.append(callback)
+    
+    def get_recent_errors(self, count: int = 10) -> list[ErrorContext]:
+        """Get recent errors
+        
+        Args:
+            count: Number of errors to return
+        
+        Returns:
+            List of recent errors
+        """
+        with self._lock_errors:
+            return self._errors[-count:]
+    
+    def get_errors_by_component(self, component: str) -> list[ErrorContext]:
+        """Get errors for specific component
+        
+        Args:
+            component: Component name
+        
+        Returns:
+            List of errors
+        """
+        with self._lock_errors:
+            return [e for e in self._errors if e.component == component]
+    
+    def get_errors_by_severity(self, severity: ErrorSeverity) -> list[ErrorContext]:
+        """Get errors by severity
+        
+        Args:
+            severity: Error severity
+        
+        Returns:
+            List of errors
+        """
+        with self._lock_errors:
+            return [e for e in self._errors if e.severity == severity]
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get error statistics
+        
+        Returns:
+            Statistics dictionary
+        """
+        with self._lock_errors:
+            stats = self._stats.copy()
+            
+            # Calculate recovery rate
+            if stats['recoveries_attempted'] > 0:
+                stats['recovery_rate'] = (
+                    stats['recoveries_successful'] / stats['recoveries_attempted'] * 100
+                )
             else:
-                self.logger.error(error_msg, exc_info=True)
-        else:
-            # Fallback to console
-            print(f"ERROR: {error_msg}", file=sys.stderr)
-            if critical:
-                traceback.print_exc()
+                stats['recovery_rate'] = 0.0
+            
+            return stats
+    
+    def clear(self):
+        """Clear error history"""
+        with self._lock_errors:
+            self._errors.clear()
+    
+    def print_summary(self):
+        """Print error summary"""
+        stats = self.get_stats()
         
-        # Check if we're getting too many errors
-        if self.error_count > self.max_errors:
-            if self.logger:
-                self.logger.critical("Too many errors, application may be unstable")
+        print("\n" + "="*50)
+        print("ERROR SUMMARY")
+        print("="*50)
+        print(f"Total errors: {stats['total_errors']}")
+        print()
+        print("By severity:")
+        for severity, count in stats['by_severity'].items():
+            if count > 0:
+                print(f"  {severity.name}: {count}")
+        print()
+        print("By component:")
+        for component, count in sorted(stats['by_component'].items()):
+            print(f"  {component}: {count}")
+        print()
+        print(f"Recoveries: {stats['recoveries_successful']}/{stats['recoveries_attempted']}")
+        print(f"Recovery rate: {stats['recovery_rate']:.1f}%")
+        print("="*50 + "\n")
+
+
+def safe_execute(
+    func: Callable,
+    component: str,
+    operation: str,
+    default: Any = None,
+    severity: ErrorSeverity = ErrorSeverity.ERROR,
+    **kwargs
+) -> Any:
+    """Safely execute a function with error handling
     
-    def safe_call(self, func: Callable, *args, fallback=None, context: str = "", **kwargs) -> Any:
-        """Call function safely with fallback on error"""
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            self.handle_error(e, context=context or func.__name__)
-            return fallback
+    Args:
+        func: Function to execute
+        component: Component name
+        operation: Operation name
+        default: Default return value on error
+        severity: Error severity
+        **kwargs: Arguments for function
     
-    def reset_error_count(self):
-        """Reset error counter"""
-        self.error_count = 0
+    Returns:
+        Function result or default value
+    """
+    try:
+        return func(**kwargs)
+    except Exception as e:
+        handler = ErrorHandler.get_instance()
+        handler.handle_error(
+            component=component,
+            operation=operation,
+            error=e,
+            severity=severity
+        )
+        return default
 
-def safe_call(fallback=None, context: str = "", critical: bool = False):
-    """Decorator for safe function calls with graceful degradation"""
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                error_context = context or func.__name__
-                
-                # Log error
-                if LOGGER_AVAILABLE:
-                    logger = get_logger()
-                    if critical:
-                        logger.critical(f"{error_context}: {str(e)}", exc_info=True)
-                    else:
-                        logger.error(f"{error_context}: {str(e)}", exc_info=True)
-                else:
-                    print(f"ERROR in {error_context}: {str(e)}", file=sys.stderr)
-                
-                return fallback
-        return wrapper
-    return decorator
 
-def safe_property(fallback=None):
-    """Decorator for safe property access"""
-    def decorator(func: Callable) -> property:
-        @wraps(func)
-        def wrapper(self):
-            try:
-                return func(self)
-            except Exception as e:
-                if LOGGER_AVAILABLE:
-                    logger = get_logger()
-                    logger.warning(f"Property {func.__name__} failed: {str(e)}")
-                return fallback
-        return property(wrapper)
-    return decorator
-
-class SafeDict(dict):
-    """Dictionary with safe access (returns None instead of KeyError)"""
-    
-    def __getitem__(self, key):
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            return None
-    
-    def get_safe(self, key, default=None, type_cast=None):
-        """Get value with optional type casting"""
-        try:
-            value = self.get(key, default)
-            if type_cast and value is not None:
-                return type_cast(value)
-            return value
-        except (ValueError, TypeError):
-            return default
-
-class HardwareNotFoundError(Exception):
-    """Raised when hardware component is not found"""
-    pass
-
-class GPUNotFoundError(HardwareNotFoundError):
-    """Raised when GPU is not found"""
-    pass
-
-class CPUTempUnavailableError(HardwareNotFoundError):
-    """Raised when CPU temperature is unavailable"""
-    pass
-
-class RAMInfoUnavailableError(HardwareNotFoundError):
-    """Raised when RAM info is unavailable"""
-    pass
-
-# Global error handler instance
-_error_handler = None
-
-def get_error_handler() -> ErrorHandler:
-    """Get global error handler instance"""
-    global _error_handler
-    if _error_handler is None:
-        _error_handler = ErrorHandler()
-    return _error_handler
-
-def init_error_handler() -> ErrorHandler:
-    """Initialize global error handler"""
-    global _error_handler
-    _error_handler = ErrorHandler()
-    return _error_handler
-
-if __name__ == "__main__":
-    # Test error handler
-    print("Testing Error Handler...")
+# Testing
+if __name__ == '__main__':
+    print("="*60)
+    print("ErrorHandler Test")
+    print("="*60)
+    print()
     
     handler = ErrorHandler()
     
-    # Test safe_call
-    def risky_function():
-        raise ValueError("Something went wrong!")
-    
-    result = handler.safe_call(risky_function, fallback="Default value", context="Test")
-    print(f"Result with fallback: {result}")
-    
-    # Test decorator
-    @safe_call(fallback=0, context="Division")
-    def divide(a, b):
-        return a / b
-    
-    print(f"5 / 2 = {divide(5, 2)}")
-    print(f"5 / 0 = {divide(5, 0)}  (should return 0)")
-    
-    # Test SafeDict
-    data = SafeDict({
-        'temperature': '75',
-        'load': 50,
-    })
-    
-    print(f"Temperature: {data.get_safe('temperature', type_cast=float)}")
-    print(f"Load: {data.get_safe('load')}")
-    print(f"Missing key: {data.get_safe('nonexistent', default='N/A')}")
-    
-    # Test custom exceptions
+    # Test 1: Simple error
     try:
-        raise GPUNotFoundError("No NVIDIA GPU detected")
-    except GPUNotFoundError as e:
-        print(f"Caught GPUNotFoundError: {e}")
+        x = 1 / 0
+    except Exception as e:
+        handler.handle_error(
+            component='Math',
+            operation='divide',
+            error=e,
+            severity=ErrorSeverity.ERROR
+        )
     
-    print("\n✅ Error Handler test complete!")
+    # Test 2: Warning
+    handler.handle_error(
+        component='Config',
+        operation='load',
+        error=Exception('File not found'),
+        severity=ErrorSeverity.WARNING
+    )
+    
+    # Test 3: Recovery strategy
+    def recovery_strategy(ctx, context):
+        print("   Attempting recovery...")
+        return True
+    
+    handler.register_recovery_strategy('Network', 'connect', recovery_strategy)
+    
+    try:
+        raise ConnectionError('Connection failed')
+    except Exception as e:
+        handler.handle_error(
+            component='Network',
+            operation='connect',
+            error=e,
+            recoverable=True
+        )
+    
+    # Print summary
+    handler.print_summary()
+    
+    print("✅ Test completed!")

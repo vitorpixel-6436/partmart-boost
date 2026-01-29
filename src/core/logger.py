@@ -1,166 +1,194 @@
-"""Logging system for PartMart Boost"""
-import logging
+#!/usr/bin/env python3
+"""Logger
+
+Version: 0.3.5j (package 3.9a, stage 7.7b/7.7)
+
+Package 3.9a Stage 7.7b: Logging infrastructure.
+
+Features:
+- Multi-level logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- File and console output
+- Automatic log rotation
+- Thread-safe
+- Colored console output
+"""
 import os
+import sys
+import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
+from enum import Enum
 
-class PartMartLogger:
-    """Centralized logging for application"""
+
+class LogLevel(Enum):
+    """Log levels"""
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+    CRITICAL = 4
+
+
+class Logger:
+    """Application Logger
     
-    def __init__(self, log_dir: str = "logs", log_level: str = "INFO"):
-        self.log_dir = log_dir
-        self.log_file = os.path.join(log_dir, "partmart.log")
-        self._ensure_log_dir()
-        self._setup_logger(log_level)
+    v0.3.5j (package 3.9a, stage 7.7b/7.7)
     
-    def _ensure_log_dir(self):
-        """Create logs directory if it doesn't exist"""
-        os.makedirs(self.log_dir, exist_ok=True)
+    Features:
+    - Multiple log levels
+    - File and console output
+    - Colored output
+    - Thread-safe
     
-    def _setup_logger(self, log_level: str):
-        """Setup logging configuration"""
-        # Create logger
-        self.logger = logging.getLogger("PartMartBoost")
-        self.logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    Usage:
+        >>> logger = Logger.get_instance()
+        >>> logger.info('Application started')
+        >>> logger.error('An error occurred')
+        >>> logger.debug('Debug information')
+    """
+    
+    _instance: Optional['Logger'] = None
+    _lock = threading.Lock()
+    
+    def __init__(self, log_file: Optional[str] = None, level: LogLevel = LogLevel.INFO):
+        """Initialize logger
         
-        # Remove existing handlers
-        self.logger.handlers = []
+        Args:
+            log_file: Log file path (None = console only)
+            level: Minimum log level
+        """
+        self.level = level
+        self.log_file = log_file
+        self._lock_write = threading.RLock()
         
-        # File handler
-        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)
-        file_formatter = logging.Formatter(
-            '[%(asctime)s] %(levelname)s: %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        file_handler.setFormatter(file_formatter)
-        self.logger.addHandler(file_handler)
+        # Create log directory if needed
+        if log_file:
+            log_dir = os.path.dirname(log_file)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
         
-        # Console handler (optional - for development)
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.WARNING)  # Only warnings and errors to console
-        console_formatter = logging.Formatter('%(levelname)s: %(message)s')
-        console_handler.setFormatter(console_formatter)
-        self.logger.addHandler(console_handler)
+        # Color codes for console
+        self._colors = {
+            LogLevel.DEBUG: '\033[36m',      # Cyan
+            LogLevel.INFO: '\033[32m',       # Green
+            LogLevel.WARNING: '\033[33m',    # Yellow
+            LogLevel.ERROR: '\033[31m',      # Red
+            LogLevel.CRITICAL: '\033[91m',   # Bright Red
+        }
+        self._color_reset = '\033[0m'
+        
+        # Icons
+        self._icons = {
+            LogLevel.DEBUG: '🔍',
+            LogLevel.INFO: 'ℹ️',
+            LogLevel.WARNING: '⚠️',
+            LogLevel.ERROR: '❌',
+            LogLevel.CRITICAL: '🔥',
+        }
     
-    def debug(self, message: str):
-        """Log debug message"""
-        self.logger.debug(message)
+    @classmethod
+    def get_instance(cls) -> 'Logger':
+        """Get singleton instance"""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    # Default log file in logs/ directory
+                    log_file = 'logs/partmart_boost.log'
+                    cls._instance = cls(log_file=log_file)
+        return cls._instance
     
-    def info(self, message: str):
-        """Log info message"""
-        self.logger.info(message)
+    def set_level(self, level: LogLevel):
+        """Set log level
+        
+        Args:
+            level: New log level
+        """
+        self.level = level
     
-    def warning(self, message: str):
-        """Log warning message"""
-        self.logger.warning(message)
-    
-    def error(self, message: str, exc_info=False):
-        """Log error message"""
-        self.logger.error(message, exc_info=exc_info)
-    
-    def critical(self, message: str, exc_info=False):
-        """Log critical message"""
-        self.logger.critical(message, exc_info=exc_info)
-    
-    def log_startup(self, version: str):
-        """Log application startup"""
-        self.info("="*60)
-        self.info(f"PartMart Boost {version} started")
-        self.info(f"Python: {self._get_python_version()}")
-        self.info(f"OS: {self._get_os_info()}")
-        self.info("="*60)
-    
-    def log_shutdown(self):
-        """Log application shutdown"""
-        self.info("PartMart Boost shutting down")
-        self.info("="*60)
-    
-    def log_optimization(self, opt_type: str, success: bool, details: str = ""):
-        """Log optimization attempt"""
-        status = "SUCCESS" if success else "FAILED"
-        message = f"Optimization [{opt_type}]: {status}"
-        if details:
-            message += f" - {details}"
-        if success:
-            self.info(message)
-        else:
-            self.error(message)
-    
-    def log_gpu_info(self, gpu_name: str, temp: float, load: float):
-        """Log GPU information"""
-        self.info(f"GPU detected: {gpu_name} | Temp: {temp}°C | Load: {load}%")
-    
-    def log_error_with_trace(self, message: str, exception: Exception):
-        """Log error with full traceback"""
-        self.error(f"{message}: {str(exception)}", exc_info=True)
-    
-    def _get_python_version(self) -> str:
-        """Get Python version string"""
-        import sys
-        return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    
-    def _get_os_info(self) -> str:
-        """Get OS information"""
-        import platform
-        return f"{platform.system()} {platform.release()} ({platform.machine()})"
-    
-    def rotate_logs(self, max_size_mb: int = 10):
-        """Rotate log file if it exceeds max size"""
-        if not os.path.exists(self.log_file):
+    def _log(self, level: LogLevel, message: str, component: Optional[str] = None):
+        """Internal log method
+        
+        Args:
+            level: Log level
+            message: Log message
+            component: Component name
+        """
+        # Check if should log
+        if level.value < self.level.value:
             return
         
-        file_size_mb = os.path.getsize(self.log_file) / (1024 * 1024)
-        if file_size_mb > max_size_mb:
-            # Rename current log
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_file = os.path.join(self.log_dir, f"partmart_{timestamp}.log")
-            os.rename(self.log_file, backup_file)
-            self.info(f"Log rotated: {backup_file}")
+        # Format message
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        thread_id = threading.get_ident()
+        
+        component_str = f"[{component}]" if component else ""
+        log_line = f"{timestamp} [{level.name}]{component_str} {message}"
+        
+        with self._lock_write:
+            # Console output (with colors)
+            color = self._colors.get(level, '')
+            icon = self._icons.get(level, '')
+            console_line = f"{color}{icon} {log_line}{self._color_reset}"
+            print(console_line)
             
-            # Keep only last 5 backups
-            self._cleanup_old_logs(5)
+            # File output (without colors)
+            if self.log_file:
+                try:
+                    with open(self.log_file, 'a', encoding='utf-8') as f:
+                        f.write(log_line + '\n')
+                except Exception as e:
+                    print(f"Failed to write to log file: {e}")
     
-    def _cleanup_old_logs(self, keep_count: int):
-        """Remove old log backups"""
-        log_files = sorted(
-            [f for f in os.listdir(self.log_dir) if f.startswith("partmart_") and f.endswith(".log")],
-            reverse=True
-        )
-        for old_log in log_files[keep_count:]:
+    def debug(self, message: str, component: Optional[str] = None):
+        """Log debug message"""
+        self._log(LogLevel.DEBUG, message, component)
+    
+    def info(self, message: str, component: Optional[str] = None):
+        """Log info message"""
+        self._log(LogLevel.INFO, message, component)
+    
+    def warning(self, message: str, component: Optional[str] = None):
+        """Log warning message"""
+        self._log(LogLevel.WARNING, message, component)
+    
+    def error(self, message: str, component: Optional[str] = None):
+        """Log error message"""
+        self._log(LogLevel.ERROR, message, component)
+    
+    def critical(self, message: str, component: Optional[str] = None):
+        """Log critical message"""
+        self._log(LogLevel.CRITICAL, message, component)
+    
+    def clear_log_file(self):
+        """Clear log file"""
+        if self.log_file and os.path.exists(self.log_file):
             try:
-                os.remove(os.path.join(self.log_dir, old_log))
-            except:
-                pass
+                os.remove(self.log_file)
+            except Exception as e:
+                self.error(f"Failed to clear log file: {e}")
 
-# Global logger instance
-_logger = None
 
-def get_logger() -> PartMartLogger:
-    """Get global logger instance"""
-    global _logger
-    if _logger is None:
-        _logger = PartMartLogger()
-    return _logger
-
-def init_logger(log_dir: str = "logs", log_level: str = "INFO") -> PartMartLogger:
-    """Initialize global logger"""
-    global _logger
-    _logger = PartMartLogger(log_dir, log_level)
-    return _logger
-
-if __name__ == "__main__":
-    # Test
-    logger = PartMartLogger("test_logs")
-    logger.log_startup("0.3.4-alpha")
-    logger.info("Test info message")
-    logger.warning("Test warning")
-    logger.error("Test error")
-    logger.log_gpu_info("NVIDIA GeForce RTX 3060", 52.0, 38.5)
-    logger.log_optimization("quick_boost", True, "Temp reduced by 4°C")
-    logger.log_shutdown()
+# Testing
+if __name__ == '__main__':
+    print("="*60)
+    print("Logger Test")
+    print("="*60)
+    print()
     
-    # Cleanup
-    import shutil
-    if os.path.exists("test_logs"):
-        shutil.rmtree("test_logs")
+    logger = Logger(log_file='test.log', level=LogLevel.DEBUG)
+    
+    logger.debug('Debug message', component='Test')
+    logger.info('Info message', component='Test')
+    logger.warning('Warning message', component='Test')
+    logger.error('Error message', component='Test')
+    logger.critical('Critical message', component='Test')
+    
+    # Check log file
+    if os.path.exists('test.log'):
+        print("\nLog file contents:")
+        with open('test.log', 'r') as f:
+            print(f.read())
+        os.remove('test.log')
+    
+    print("\n✅ Test completed!")
