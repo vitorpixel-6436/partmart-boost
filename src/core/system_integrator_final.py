@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """System Integrator Final - Complete system integration with REAL components
 
-Version: 0.3.5d_hotfix3 (package 3.9a, stage 7.7d_hotfix3)
+Version: 0.3.5d_hotfix4 (package 3.9a, stage 7.7d_hotfix4)
 
 Integrates all real components:
 - PerformanceMonitor (psutil/nvidia-ml-py)
@@ -109,7 +109,7 @@ class SystemStatus:
 class SystemIntegratorFinal:
     """Complete system integration with REAL components
     
-    v0.3.5d_hotfix3 - Stage 7.7d: Real implementation + Game Profiles
+    v0.3.5d_hotfix4 - Stage 7.7d: Real implementation + Game Profiles
     
     Integrates:
     - Performance monitoring (CPU/GPU/RAM)
@@ -159,7 +159,7 @@ class SystemIntegratorFinal:
         if self._initialized:
             return True
         
-        print("Initializing PartMart Boost v0.3.5d_hotfix3...")
+        print("Initializing PartMart Boost v0.3.5d_hotfix4...")
         
         try:
             # Load configuration
@@ -284,10 +284,12 @@ class SystemIntegratorFinal:
                 self.game_detector.start()
                 print("[+] Game detection started")
             
-            # Start data aggregator
-            if self.data_aggregator:
+            # Start data aggregator (only if it has start method)
+            if self.data_aggregator and hasattr(self.data_aggregator, 'start'):
                 self.data_aggregator.start()
                 print("[+] Data aggregation started")
+            elif self.data_aggregator:
+                print("[+] Data aggregator ready (no background tasks)")
             
             self._running = True
             print("")
@@ -299,6 +301,8 @@ class SystemIntegratorFinal:
         
         except Exception as e:
             print(f"[-] Start failed: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def stop(self) -> bool:
@@ -310,8 +314,8 @@ class SystemIntegratorFinal:
         print("Stopping PartMart Boost systems...")
         
         try:
-            # Stop data aggregator
-            if self.data_aggregator:
+            # Stop data aggregator (only if it has stop method)
+            if self.data_aggregator and hasattr(self.data_aggregator, 'stop'):
                 self.data_aggregator.stop()
                 print("[+] Data aggregation stopped")
             
@@ -378,7 +382,7 @@ class SystemIntegratorFinal:
         
         print("")
         print("=" * 60)
-        print("  PartMart Boost v0.3.5d_hotfix3 - System Status")
+        print("  PartMart Boost v0.3.5d_hotfix4 - System Status")
         print("  Stage 7.7d: FSR 3.x + Game Profiles")
         print("=" * 60)
         print(f"Initialized: {'Yes' if status.initialized else 'No'}")
@@ -422,7 +426,7 @@ class SystemIntegratorFinal:
 
 if __name__ == '__main__':
     # Test system integrator
-    print("Testing SystemIntegratorFinal v0.3.5d_hotfix3...")
+    print("Testing SystemIntegratorFinal v0.3.5d_hotfix4...")
     print("")
     
     integrator = SystemIntegratorFinal()

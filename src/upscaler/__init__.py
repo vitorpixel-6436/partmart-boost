@@ -1,38 +1,11 @@
 #!/usr/bin/env python3
-"""Universal Upscaler Module
+"""Upscaler Package
 
-Version: 0.3.5d (package 3.8a, stage 4/6)
+Version: 0.3.5d_hotfix4 (package 3.9a, stage 7.7d_hotfix4)
 
-Multi-backend upscaling system supporting:
-- OptiScaler (FSR 3.1 / XeSS 2.1 / DLSS via middleware) ⭐
-- FSR 3.1 (direct DLL)
-- XeSS 2.1 (direct DLL)
-- Software fallback
+UPDATED: Import from upscaler_types instead of types
 """
+from .upscaler_types import UpscaleMode, Backend, APIType
+from .upscaler import Upscaler
 
-from .core import UniversalUpscaler, UpscaleContext
-from .types import (
-    UpscalerBackend,
-    UpscalerQuality,
-    UpscalerFeature,
-    UpscaleConfig,
-    FrameData,
-    UpscaleMetrics,
-    BackendInfo
-)
-
-__version__ = "0.3.5d+stage4"
-__all__ = [
-    'UniversalUpscaler',
-    'UpscaleContext',
-    'UpscalerBackend',
-    'UpscalerQuality',
-    'UpscalerFeature',
-    'UpscaleConfig',
-    'FrameData',
-    'UpscaleMetrics',
-    'BackendInfo',
-]
-
-print("[UniversalUpscaler] Package 3.8a Stage 4/6 - OptiScaler Integration loaded")
-print("  Backends: OptiScaler ⭐ | FSR3 | XeSS | Software")
+__all__ = ['Upscaler', 'UpscaleMode', 'Backend', 'APIType']
