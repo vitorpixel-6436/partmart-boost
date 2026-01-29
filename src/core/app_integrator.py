@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Application Integrator
 
-Version: 0.3.5e (package 3.9a, stage 7.2/7.7)
+Version: 0.3.5f (package 3.9a, stage 7.4/7.7)
 
 Unified access point for all application components.
 
-Package 3.9a Stage 7.2: Backend services integration.
+Package 3.9a Stage 7.4: DataBus integration.
 
 Features:
 - Unified component access
@@ -13,6 +13,7 @@ Features:
 - Health monitoring
 - Graceful degradation
 - Service manager access
+- DataBus pub/sub system (NEW)
 """
 import time
 from typing import Optional, Dict, Any
@@ -27,10 +28,10 @@ class AppIntegrator:
     Components:
     - BackendBridge: API for backend operations
     - QtSignalBridge: Thread-safe Qt signals
-    - BackendServiceManager: Backend services (Stage 7.2)
+    - BackendServiceManager: Backend services
     - PerformanceMonitor: Performance monitoring
-    - ConfigManager: Configuration management (Stage 7.3)
-    - DataBus: Event-based data transport
+    - ConfigManager: Configuration management
+    - DataBus: Event-based pub/sub system (NEW in Stage 7.4)
     
     Usage:
         integrator = AppIntegrator()
@@ -39,6 +40,10 @@ class AppIntegrator:
         bridge = integrator.get_bridge()
         qt_signals = integrator.get_qt_signals()
         monitor = integrator.get_monitor()
+        bus = integrator.get_data_bus()  # NEW
+        
+        # Subscribe to bus events
+        bus.subscribe('performance.*', lambda msg: print(msg.data))
         
         # Check health
         health = integrator.get_health()
@@ -59,6 +64,7 @@ class AppIntegrator:
         self._monitor = None
         self._config = None
         self._data_bus = None
+        self._bus_integration = None
         
         self._initialized = False
         self._init_time = time.perf_counter()
@@ -101,7 +107,7 @@ class AppIntegrator:
         return cls._instance
     
     def set_service_manager(self, service_manager):
-        """Set BackendServiceManager (Stage 7.2)
+        """Set BackendServiceManager
         
         Args:
             service_manager: BackendServiceManager instance
@@ -112,6 +118,24 @@ class AppIntegrator:
         if service_manager:
             self._monitor = service_manager.get_monitor()
             print("[AppIntegrator] ✅ ServiceManager connected")
+    
+    def set_data_bus(self, data_bus):
+        """Set DataBus (Stage 7.4)
+        
+        Args:
+            data_bus: DataBus instance
+        """
+        self._data_bus = data_bus
+        print("[AppIntegrator] ✅ DataBus connected")
+    
+    def set_bus_integration(self, bus_integration):
+        """Set DataBusIntegration (Stage 7.4)
+        
+        Args:
+            bus_integration: DataBusIntegration instance
+        """
+        self._bus_integration = bus_integration
+        print("[AppIntegrator] ✅ BusIntegration connected")
     
     def get_bridge(self):
         """Get BackendBridge
@@ -130,7 +154,7 @@ class AppIntegrator:
         return self._qt_signals
     
     def get_service_manager(self):
-        """Get BackendServiceManager (Stage 7.2)
+        """Get BackendServiceManager
         
         Returns:
             BackendServiceManager instance or None
@@ -146,7 +170,7 @@ class AppIntegrator:
         return self._monitor
     
     def get_config(self):
-        """Get ConfigManager (Stage 7.3)
+        """Get ConfigManager (Stage 7.3+)
         
         Returns:
             ConfigManager instance or None
@@ -160,6 +184,14 @@ class AppIntegrator:
             DataBus instance or None
         """
         return self._data_bus
+    
+    def get_bus_integration(self):
+        """Get DataBusIntegration (Stage 7.4)
+        
+        Returns:
+            DataBusIntegration instance or None
+        """
+        return self._bus_integration
     
     def is_ready(self) -> bool:
         """Check if system is ready
@@ -182,7 +214,8 @@ class AppIntegrator:
             'service_manager': 'ok' if self._service_manager else 'unavailable',
             'monitor': 'ok' if self._monitor else 'unavailable',
             'config': 'pending' if self._config is None else 'ok',
-            'data_bus': 'pending' if self._data_bus is None else 'ok',
+            'data_bus': 'ok' if self._data_bus else 'pending',
+            'bus_integration': 'ok' if self._bus_integration else 'pending',
         }
         
         return health
@@ -194,6 +227,37 @@ class AppIntegrator:
             Uptime in seconds
         """
         return time.perf_counter() - self._init_time
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get comprehensive stats (Stage 7.4)
+        
+        Returns:
+            Statistics dictionary
+        """
+        stats = {
+            'uptime_seconds': self.get_uptime(),
+            'ready': self.is_ready(),
+            'components': self.get_health(),
+        }
+        
+        # Add DataBus stats if available
+        if self._data_bus:
+            try:
+                stats['bus'] = self._data_bus.get_stats()
+            except Exception:
+                pass
+        
+        # Add monitor stats if available
+        if self._monitor:
+            try:
+                stats['monitor'] = {
+                    'active': self._monitor.is_monitoring(),
+                    'interval_ms': getattr(self._monitor, 'interval_ms', None),
+                }
+            except Exception:
+                pass
+        
+        return stats
     
     def print_status(self):
         """Print system status"""
@@ -215,4 +279,17 @@ class AppIntegrator:
         
         print(f"\n⏱️  Uptime: {self.get_uptime():.1f}s")
         print(f"🔄 Ready: {self.is_ready()}")
+        
+        # Print DataBus stats if available
+        if self._data_bus:
+            try:
+                bus_stats = self._data_bus.get_stats()
+                print(f"\n📊 DataBus Stats:")
+                print(f"   Messages: {bus_stats.get('messages_published', 0)} published, "
+                      f"{bus_stats.get('messages_delivered', 0)} delivered")
+                print(f"   Subscriptions: {bus_stats.get('subscriptions', 0)}")
+                print(f"   History: {bus_stats.get('history_size', 0)} messages")
+            except Exception:
+                pass
+        
         print("="*50 + "\n")
