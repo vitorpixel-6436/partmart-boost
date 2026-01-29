@@ -1,14 +1,15 @@
 @echo off
 REM PartMart Boost Launcher for Windows
-REM Version: 0.3.5d+patch4
-REM Note: Use launcher_simple.bat for simpler launch
+REM Version: 0.3.5d (Package 3.9a, Stage 7.8a)
+REM Launches new launcher.py with Modern GUI support
 
-title PartMart Boost Launcher
+title PartMart Boost - Stage 7.8a
 
 echo ========================================================
 echo.
 echo     PARTMART BOOST LAUNCHER
-echo     Version: 0.3.5d+patch4
+echo     Version: 0.3.5d (Package 3.9a, Stage 7.8a)
+echo     Liquid Glass UI Revolution
 echo.
 echo ========================================================
 echo.
@@ -28,66 +29,31 @@ if %errorlevel% neq 0 (
 echo [+] Python found
 echo.
 
-REM Install dependencies if needed
-if not exist "venv" (
-    echo [*] Creating virtual environment...
-    python -m venv venv
-    echo.
-)
-
-echo [*] Activating virtual environment...
-call venv\Scripts\activate.bat
-echo.
-
-echo [*] Installing/updating dependencies...
-pip install -q -r requirements.txt
+REM Install PyQt6 if needed
+echo [*] Checking dependencies...
+pip install -q PyQt6 psutil nvidia-ml-py3 colorama
 if %errorlevel% neq 0 (
     echo [!] Some dependencies failed, but continuing...
 )
 echo [+] Dependencies ready
 echo.
 
-echo ========================================================
-echo.
-echo Select mode:
-echo.
-echo   1. CLI Mode (Recommended for testing)
-echo   2. GUI Mode (Requires PyQt6)
-echo   3. Run Full Test Suite
-echo   4. Exit
-echo.
-echo ========================================================
+echo [*] Launching PartMart Boost...
 echo.
 
-set /p mode="Enter choice (1-4): "
+REM Launch new launcher.py with Modern GUI support
+python launcher.py
 
-if "%mode%"=="1" (
+if %errorlevel% neq 0 (
     echo.
-    echo [*] Launching CLI mode...
+    echo [X] Launch failed!
     echo.
-    python src\main_cli.py
-) else if "%mode%"=="2" (
-    echo.
-    echo [*] Launching GUI mode...
-    echo.
-    python src\main.py
-) else if "%mode%"=="3" (
-    echo.
-    echo [*] Running full test suite...
-    echo.
-    python tests\test_all_modules.py
-) else if "%mode%"=="4" (
-    echo.
-    echo Goodbye!
-    goto :end
-) else (
-    echo.
-    echo [X] Invalid choice
+    pause
+    exit /b 1
 )
 
 echo.
 echo ========================================================
 echo.
 
-:end
 pause
