@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5e (package 3.9a, stage 7.3/7.7)
+Version: 0.3.5f (package 3.9a, stage 7.4/7.7)
 
-Package 3.9a Stage 7.3: Complete frontend integration.
+Package 3.9a Stage 7.4: DataBus pub/sub system integration.
 
 Usage:
     python src/main.py              # Normal launch
@@ -19,9 +19,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5e"
+VERSION = "0.3.5f"
 PACKAGE = "3.9a"
-STAGE = "7.3/7.7"
+STAGE = "7.4/7.7"
 
 
 def print_banner():
@@ -108,7 +108,7 @@ def main():
             integrator.print_status()
         
         # Launch GUI (unless --no-gui)
-        if not args.no-gui:
+        if not args.no_gui:
             print("Launching GUI...\n")
             
             try:
