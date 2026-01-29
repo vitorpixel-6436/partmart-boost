@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5h (package 3.9a, stage 7.6/7.7)
+Version: 0.3.5i (package 3.9a, stage 7.7a/7.7)
 
-Package 3.9a Stage 7.6: Configuration management system.
+Package 3.9a Stage 7.7a: Testing infrastructure and unit tests.
 
 Usage:
     python src/main.py              # Normal launch
@@ -11,6 +11,7 @@ Usage:
     python src/main.py --diagnose   # Diagnostic mode
     python src/main.py --minimal    # Minimal mode
     python src/main.py --no-gui     # No GUI
+    python src/main.py --test       # Run tests
 """
 import sys
 import os
@@ -19,9 +20,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5h"
+VERSION = "0.3.5i"
 PACKAGE = "3.9a"
-STAGE = "7.6/7.7"
+STAGE = "7.7a/7.7"
 
 
 def print_banner():
@@ -54,6 +55,33 @@ def check_dependencies():
         return 1
 
 
+def run_tests():
+    """Run test suite"""
+    print("Running test suite...\n")
+    
+    try:
+        # Add tests to path
+        tests_dir = os.path.join(os.path.dirname(__file__), '..', 'tests')
+        sys.path.insert(0, tests_dir)
+        
+        # Import and run tests
+        from run_tests import run_tests as execute_tests
+        
+        success = execute_tests(verbosity=2)
+        return 0 if success else 1
+    
+    except ImportError as e:
+        print(f"❌ Tests not available: {e}")
+        print("\nTo run tests, make sure tests/ directory exists.")
+        return 1
+    
+    except Exception as e:
+        print(f"❌ Test execution failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
 def main():
     """Main entry point"""
     # Parse arguments
@@ -62,6 +90,8 @@ def main():
     )
     parser.add_argument('--check', action='store_true',
                        help='Check dependencies only')
+    parser.add_argument('--test', action='store_true',
+                       help='Run test suite')
     parser.add_argument('--diagnose', action='store_true',
                        help='Run in diagnostic mode')
     parser.add_argument('--minimal', action='store_true',
@@ -77,6 +107,10 @@ def main():
     # Check dependencies only
     if args.check:
         return check_dependencies()
+    
+    # Run tests
+    if args.test:
+        return run_tests()
     
     # Determine mode
     if args.diagnose:
