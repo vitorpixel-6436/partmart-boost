@@ -1,104 +1,210 @@
 #!/usr/bin/env python3
 """Universal Upscaler - Main API
 
-Version: 0.3.5d (package 3.7a) - Stage 1/9
+Version: 0.3.5d (package 3.8a, stage 4/6)
 """
 import threading
-from typing import Optional, Tuple, List
-import numpy.typing as npt
+from typing import Optional, List
+from pathlib import Path
 
 from .types import (
+    UpscalerBackend,
+    UpscalerQuality,
     UpscaleConfig,
     FrameData,
     UpscaleMetrics,
-    BackendInfo,
-    UpscalerBackend,
-    BackendNotAvailableError,
-    UpscaleError
+    BackendInfo
 )
-from .backends import BaseBackend, FSR3Backend, XeSSBackend, SoftwareBackend
+from .backends.base import BaseBackend
 
 
 class UniversalUpscaler:
-    """Universal Upscaler System
+    """Universal Upscaler - Auto-detecting multi-backend upscaling system
     
-    Auto-detects and uses best available backend:
-    1. FSR 3.1 (AMD, if available)
-    2. XeSS 2.1 (Intel, if available)
-    3. Software (always available)
+    Supports:
+    - OptiScaler (FSR 3.1 / XeSS 2.1 / DLSS via middleware) ⭐ PRIMARY
+    - FSR 3.1 (AMD, direct DLL)
+    - XeSS 2.1 (Intel, direct DLL)
+    - Software fallback (always works)
     
-    Can hot-swap between backends.
+    Usage:
+        upscaler = UniversalUpscaler()
+        upscaler.initialize()  # Auto-detects best backend
+        
+        context = upscaler.create_context(
+            input_resolution=(1920, 1080),
+            output_resolution=(3840, 2160),
+            quality=UpscalerQuality.QUALITY
+        )
+        
+        upscaled, metrics = context.upscale(frame)
     """
     
-    def __init__(self):
-        """Initialize Universal Upscaler"""
+    def __init__(self, backend: Optional[UpscalerBackend] = None):
+        """Initialize Universal Upscaler
+        
+        Args:
+            backend: Force specific backend (None = auto-detect)
+        """
         self._lock = threading.Lock()
-        self._backends: List[BaseBackend] = []
-        self._current_backend: Optional[BaseBackend] = None
+        self._backend: Optional[BaseBackend] = None
+        self._forced_backend = backend
         self._config: Optional[UpscaleConfig] = None
         
-        print("[UniversalUpscaler] Initializing (Stage 1/9)")
-        print("  Next stages will add:")
-        print("  - Stage 2: GPU Detector")
-        print("  - Stage 3: Backend Manager")
-        print("  - Stage 4: Real FSR 3.1")
-        print("  - Stage 5: Real XeSS 2.1")
-        print("  - Stage 6: Enhanced Software")
-        print("  - Stage 7: Frame Generation")
-        print("  - Stage 8: Integration")
-        print("  - Stage 9: Tests & Docs")
+        print("[UniversalUpscaler] Initialized (Package 3.8a, Stage 4/6)")
     
     def initialize(self) -> bool:
-        """Initialize upscaler system
+        """Initialize upscaler with best available backend
+        
+        Priority:
+        1. OptiScaler (if installed) → Real FSR 3.1 on GPU
+        2. Direct DLL (if available) → FSR/XeSS via DLL
+        3. Software (always works) → CPU fallback
         
         Returns:
             True if successful
         """
         with self._lock:
-            print("\n[UniversalUpscaler] Stage 1: Stub initialize")
+            print("\n[UniversalUpscaler] Stage 4: Initialize with OptiScaler support")
             
-            # Stage 1: Create backend stubs
-            self._backends = [
-                FSR3Backend(),
-                XeSSBackend(),
-                SoftwareBackend()
+            if self._forced_backend:
+                # Use forced backend
+                return self._init_backend(self._forced_backend)
+            
+            # Try backends in priority order
+            backends_to_try = [
+                UpscalerBackend.OPTISCALER,  # Try OptiScaler first ⭐
+                UpscalerBackend.FSR3,         # Then direct FSR DLL
+                UpscalerBackend.XESS,         # Then XeSS DLL
+                UpscalerBackend.SOFTWARE,     # Software fallback
             ]
             
-            # Stage 2 will add: Auto-detect best backend
-            # Stage 3 will add: Backend manager
+            for backend_type in backends_to_try:
+                if self._init_backend(backend_type):
+                    info = self._backend.get_info()
+                    print(f"\n[UniversalUpscaler] Using backend: {info.backend.name}")
+                    print(f"  Version: {info.version}")
+                    print(f"  GPU: {info.gpu_name}")
+                    return True
             
-            print("[UniversalUpscaler] Stage 1: Architecture ready")
-            return True
+            print("[UniversalUpscaler] ERROR: No backend available!")
+            return False
     
-    def get_available_backends(self) -> List[BackendInfo]:
-        """Get list of available backends
+    def _init_backend(self, backend_type: UpscalerBackend) -> bool:
+        """Initialize specific backend
+        
+        Args:
+            backend_type: Backend to initialize
         
         Returns:
-            List of backend info
+            True if successful
         """
-        with self._lock:
-            return [b.get_info() for b in self._backends]
+        try:
+            # Import backend
+            if backend_type == UpscalerBackend.OPTISCALER:
+                from .backends.optiscaler_backend import OptiScalerBackend
+                backend = OptiScalerBackend()
+            elif backend_type == UpscalerBackend.FSR3:
+                from .backends.fsr3 import FSR3Backend
+                backend = FSR3Backend()
+            elif backend_type == UpscalerBackend.XESS:
+                from .backends.xess import XeSSBackend
+                backend = XeSSBackend()
+            elif backend_type == UpscalerBackend.SOFTWARE:
+                from .backends.software import SoftwareBackend
+                backend = SoftwareBackend()
+            else:
+                return False
+            
+            # Check availability
+            if not backend.is_available():
+                print(f"[UniversalUpscaler] {backend_type.name} not available")
+                return False
+            
+            # Initialize
+            if not backend.initialize():
+                print(f"[UniversalUpscaler] {backend_type.name} initialization failed")
+                return False
+            
+            self._backend = backend
+            return True
+        
+        except ImportError as e:
+            print(f"[UniversalUpscaler] Failed to import {backend_type.name}: {e}")
+            return False
+        except Exception as e:
+            print(f"[UniversalUpscaler] {backend_type.name} init error: {e}")
+            return False
     
-    def create_context(
-        self,
-        config: UpscaleConfig
-    ) -> bool:
+    def create_context(self, config: UpscaleConfig) -> 'UpscaleContext':
         """Create upscaling context
         
         Args:
-            config: Upscale configuration
+            config: Upscaling configuration
+        
+        Returns:
+            UpscaleContext instance
+        """
+        if not self._backend:
+            raise RuntimeError("UniversalUpscaler not initialized")
+        
+        self._config = config
+        
+        if not self._backend.create_context(config):
+            raise RuntimeError("Failed to create backend context")
+        
+        return UpscaleContext(self._backend, config)
+    
+    def get_backend_info(self) -> Optional[BackendInfo]:
+        """Get current backend information
+        
+        Returns:
+            BackendInfo or None
+        """
+        if self._backend:
+            return self._backend.get_info()
+        return None
+    
+    def switch_backend(self, backend_type: UpscalerBackend) -> bool:
+        """Switch to different backend at runtime
+        
+        Args:
+            backend_type: New backend type
         
         Returns:
             True if successful
         """
         with self._lock:
-            print("[UniversalUpscaler] Stage 1: Stub create_context")
-            self._config = config
-            # Stage 2-3 will add: Backend selection and initialization
-            return True
+            # Shutdown current backend
+            if self._backend:
+                self._backend.shutdown()
+            
+            # Initialize new backend
+            success = self._init_backend(backend_type)
+            
+            # Recreate context if we had one
+            if success and self._config:
+                self._backend.create_context(self._config)
+            
+            return success
     
-    def upscale(self, frame: FrameData) -> Tuple[npt.NDArray, UpscaleMetrics]:
-        """Upscale frame
+    def shutdown(self):
+        """Shutdown upscaler"""
+        with self._lock:
+            if self._backend:
+                self._backend.shutdown()
+                self._backend = None
+
+
+class UpscaleContext:
+    """Upscaling context for a specific configuration"""
+    
+    def __init__(self, backend: BaseBackend, config: UpscaleConfig):
+        self.backend = backend
+        self.config = config
+    
+    def upscale(self, frame: FrameData) -> tuple[np.ndarray, UpscaleMetrics]:
+        """Upscale a frame
         
         Args:
             frame: Input frame data
@@ -106,61 +212,22 @@ class UniversalUpscaler:
         Returns:
             Tuple of (upscaled_frame, metrics)
         """
-        raise NotImplementedError("UniversalUpscaler: Upscale in Stage 3+")
+        return self.backend.upscale(frame)
     
     def generate_frame(
         self,
         prev_frame: FrameData,
         next_frame: FrameData,
         t: float = 0.5
-    ) -> Tuple[npt.NDArray, UpscaleMetrics]:
+    ) -> tuple[np.ndarray, UpscaleMetrics]:
         """Generate intermediate frame
         
         Args:
             prev_frame: Previous frame
             next_frame: Next frame
-            t: Interpolation factor (0.0-1.0)
+            t: Interpolation factor
         
         Returns:
             Tuple of (generated_frame, metrics)
         """
-        raise NotImplementedError("UniversalUpscaler: Frame gen in Stage 7")
-    
-    def swap_backend(self, backend: UpscalerBackend) -> bool:
-        """Swap to different backend
-        
-        Args:
-            backend: Target backend
-        
-        Returns:
-            True if successful
-        """
-        with self._lock:
-            print(f"[UniversalUpscaler] Stage 1: Stub swap to {backend.name}")
-            # Stage 3 will add: Real backend swapping
-            return False
-    
-    def get_current_backend(self) -> Optional[UpscalerBackend]:
-        """Get current backend
-        
-        Returns:
-            Current backend or None
-        """
-        with self._lock:
-            if self._current_backend:
-                return self._current_backend.get_backend_type()
-            return None
-    
-    def shutdown(self) -> bool:
-        """Shutdown upscaler and cleanup
-        
-        Returns:
-            True if successful
-        """
-        with self._lock:
-            for backend in self._backends:
-                backend.shutdown()
-            self._backends.clear()
-            self._current_backend = None
-            print("[UniversalUpscaler] Stage 1: Shutdown complete")
-            return True
+        return self.backend.generate_frame(prev_frame, next_frame, t)

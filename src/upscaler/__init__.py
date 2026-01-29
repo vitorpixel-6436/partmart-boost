@@ -1,39 +1,38 @@
 #!/usr/bin/env python3
-"""Universal Upscaler System
+"""Universal Upscaler Module
 
-Version: 0.3.5d (package 3.7a) - Stage 1/9
+Version: 0.3.5d (package 3.8a, stage 4/6)
 
-Hybrid upscaling system supporting:
-- FSR 3.1 (AMD, real implementation)
-- XeSS 2.1 (Intel, real implementation)  
-- Software Fallback (cross-platform)
-
-Auto-detects best backend and swaps on the fly.
+Multi-backend upscaling system supporting:
+- OptiScaler (FSR 3.1 / XeSS 2.1 / DLSS via middleware) ⭐
+- FSR 3.1 (direct DLL)
+- XeSS 2.1 (direct DLL)
+- Software fallback
 """
 
-from .core import UniversalUpscaler
+from .core import UniversalUpscaler, UpscaleContext
 from .types import (
     UpscalerBackend,
     UpscalerQuality,
+    UpscalerFeature,
     UpscaleConfig,
     FrameData,
     UpscaleMetrics,
-    UpscalerException,
-    BackendNotAvailableError,
-    UpscaleError
+    BackendInfo
 )
 
-__version__ = "0.3.5d+stage1"
+__version__ = "0.3.5d+stage4"
 __all__ = [
     'UniversalUpscaler',
+    'UpscaleContext',
     'UpscalerBackend',
     'UpscalerQuality',
+    'UpscalerFeature',
     'UpscaleConfig',
     'FrameData',
     'UpscaleMetrics',
-    'UpscalerException',
-    'BackendNotAvailableError',
-    'UpscaleError',
+    'BackendInfo',
 ]
 
-print("[UniversalUpscaler] Stage 1/9 - Architecture loaded")
+print("[UniversalUpscaler] Package 3.8a Stage 4/6 - OptiScaler Integration loaded")
+print("  Backends: OptiScaler ⭐ | FSR3 | XeSS | Software")
