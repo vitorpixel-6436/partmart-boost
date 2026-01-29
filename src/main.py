@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5n (package 3.9a, stage 7.7b.5.1/7.7)
+Version: 0.3.5o (package 3.9a, stage 7.7b.5.2/7.7)
 
-Package 3.9a Stage 7.7b.5.1: Error handling in PerformanceMonitor service.
+Package 3.9a Stage 7.7b.5.2: Error handling in GameDetectionService.
 
 Usage:
     python src/main.py              # Normal launch
@@ -20,9 +20,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5n"
+VERSION = "0.3.5o"
 PACKAGE = "3.9a"
-STAGE = "7.7b.5.1/7.7"
+STAGE = "7.7b.5.2/7.7"
 
 
 def print_banner():
@@ -142,7 +142,7 @@ def main():
             integrator.print_status()
         
         # Launch GUI (unless --no-gui)
-        if not args.no_gui:
+        if not args.no-gui:
             print("Launching GUI...\n")
             
             try:
