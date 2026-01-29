@@ -1,339 +1,281 @@
 #!/usr/bin/env python3
 """Dashboard Widget
 
-Version: 0.3.5d (package 3.9a, stage 1/3)
+Version: 0.3.5e (package 3.9a, stage 7/7)
 
-Real-time dashboard with crash protection.
-
-Package 3.9a Stage 1 Fixes:
-- Fixed memory leak in FPSGraphWidget
-- Fixed thread safety with threading.Lock
-- Added proper resource cleanup
-- Fixed QPainter resource management
+Package 3.9a Stage 7: Integration with BackendBridge
+- Use Bridge for all data access
+- Subscribe to Qt signals
+- Thread-safe updates
 """
-import sys
-import time
-import traceback
-from pathlib import Path
-from collections import deque
-from threading import Lock
-
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPainter, QColor, QPen
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 try:
-    from core.fps_tracker import FPSTracker
-    from monitors.performance_monitor import PerformanceMonitor
-except ImportError as e:
-    print(f"[Dashboard] WARNING: Import error: {e}")
-    FPSTracker = None
-    PerformanceMonitor = None
+    from PyQt6.QtWidgets import (
+        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+        QFrame, QGridLayout
+    )
+    from PyQt6.QtCore import Qt, QTimer
+    from PyQt6.QtGui import QPainter, QPen, QColor, QFont
+    PYQT6_AVAILABLE = True
+except ImportError:
+    PYQT6_AVAILABLE = False
+    print("[DashboardWidget] PyQt6 not available")
+
+from typing import Optional, List
+from collections import deque
+
+# STAGE 7: Import Bridge components
+try:
+    from core.backend_bridge import BackendBridge
+    from core.query_system import QueryBuilder
+    from core.qt_signal_bridge import QtSignalBridge
+    BRIDGE_AVAILABLE = True
+except ImportError:
+    BRIDGE_AVAILABLE = False
+    print("[DashboardWidget] BackendBridge not available")
 
 
 class FPSGraphWidget(QWidget):
     """FPS Graph Widget
     
-    Package 3.9a Stage 1 Fixes:
-    - Fixed memory leak (proper deque management)
-    - Fixed QPainter cleanup
-    - Added resource disposal
+    Stage 7: Updated for Bridge integration
     """
     
-    def __init__(self, max_samples=60):
+    def __init__(self):
         super().__init__()
-        self.setMinimumHeight(200)
-        self.max_samples = max_samples
+        self.setMinimumSize(300, 150)
+        self.fps_history: deque = deque(maxlen=100)
         
-        # STAGE 1 FIX: Ensure deque has proper maxlen
-        self.fps_history = deque(maxlen=max_samples)
-        
-        # Initialize with zeros
-        for _ in range(max_samples):
+        # Add some initial data
+        for _ in range(100):
             self.fps_history.append(0.0)
     
     def add_fps(self, fps: float):
-        """Add FPS sample"""
-        try:
-            # STAGE 1 FIX: Deque will automatically drop old items
-            self.fps_history.append(float(fps))
-            self.update()
-        except Exception as e:
-            print(f"[FPSGraph] Error: {e}")
-    
-    def clear(self):
-        """Clear history"""
-        try:
-            self.fps_history.clear()
-            for _ in range(self.max_samples):
-                self.fps_history.append(0.0)
-            self.update()
-        except Exception as e:
-            print(f"[FPSGraph] Clear error: {e}")
+        """Add FPS data point"""
+        self.fps_history.append(fps)
+        self.update()
     
     def paintEvent(self, event):
-        """Paint FPS graph
-        
-        Package 3.9a Stage 1 Fix:
-        - Added proper QPainter cleanup
-        - Added try-finally to ensure painter.end()
-        """
+        """Paint FPS graph"""
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
         try:
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            
             # Background
-            painter.fillRect(self.rect(), QColor(26, 26, 26))
+            painter.fillRect(self.rect(), QColor(30, 30, 30))
             
-            # Grid lines
-            pen = QPen(QColor(58, 58, 58))
-            pen.setWidth(1)
-            painter.setPen(pen)
-            
-            width = self.width()
-            height = self.height()
-            
-            # Draw FPS reference lines
-            for fps in [30, 60, 120, 144]:
-                y = height - int((fps / 200.0) * height)
-                if 0 <= y <= height:
-                    painter.drawLine(0, y, width, y)
-                    painter.drawText(5, y - 2, f"{fps}")
-            
-            # Draw FPS line
+            # Draw graph
             if len(self.fps_history) > 1:
-                pen = QPen(QColor(13, 115, 119))
-                pen.setWidth(2)
-                painter.setPen(pen)
+                width = self.width()
+                height = self.height()
                 
-                points = []
+                # Scale
+                max_fps = max(max(self.fps_history), 60.0)
+                points_per_pixel = len(self.fps_history) / width
+                
+                # Draw line
+                painter.setPen(QPen(QColor(0, 200, 150), 2))
+                
+                prev_x = 0
+                prev_y = height - (self.fps_history[0] / max_fps) * height
+                
                 for i, fps in enumerate(self.fps_history):
-                    x = int((i / self.max_samples) * width)
-                    y = height - int((min(fps, 200) / 200.0) * height)
-                    points.append((x, y))
+                    x = int(i / points_per_pixel)
+                    y = height - (fps / max_fps) * height
+                    
+                    if i > 0:
+                        painter.drawLine(int(prev_x), int(prev_y), x, int(y))
+                    
+                    prev_x = x
+                    prev_y = y
                 
-                for i in range(len(points) - 1):
-                    painter.drawLine(points[i][0], points[i][1],
-                                   points[i+1][0], points[i+1][1])
-            
-            # Current FPS text
-            if self.fps_history:
-                current_fps = self.fps_history[-1]
-                text = f"Current: {current_fps:.1f} FPS"
-                painter.setPen(QColor(224, 224, 224))
-                painter.drawText(width - 150, 20, text)
-        
-        except Exception as e:
-            print(f"[FPSGraph] Paint error: {e}")
+                # Draw 60 FPS line
+                sixty_fps_y = height - (60.0 / max_fps) * height
+                painter.setPen(QPen(QColor(255, 255, 0, 100), 1, Qt.PenStyle.DashLine))
+                painter.drawLine(0, int(sixty_fps_y), width, int(sixty_fps_y))
+                
+                # Labels
+                painter.setPen(QColor(200, 200, 200))
+                font = QFont()
+                font.setPointSize(8)
+                painter.setFont(font)
+                painter.drawText(5, 15, f"Max: {max_fps:.0f}")
+                painter.drawText(5, height - 5, "0")
         
         finally:
-            # STAGE 1 FIX: Always end painter to free resources
             painter.end()
-    
-    def cleanup(self):
-        """Clean up resources"""
-        try:
-            self.fps_history.clear()
-        except Exception as e:
-            print(f"[FPSGraph] Cleanup error: {e}")
 
 
 class DashboardWidget(QWidget):
     """Dashboard Widget
     
-    Package 3.9a Stage 1 Fixes:
-    - Replaced boolean lock with threading.Lock
-    - Added proper resource cleanup
-    - Fixed memory leaks
+    Version: 0.3.5e (package 3.9a, stage 7/7)
+    
+    Stage 7 Changes:
+    - Integrated with BackendBridge
+    - Uses Qt signals for updates
+    - Thread-safe operations
+    - No direct backend access
     """
     
-    def __init__(self):
+    def __init__(self, bridge: Optional[BackendBridge] = None, 
+                 qt_signals: Optional[QtSignalBridge] = None):
+        """Initialize dashboard
+        
+        Args:
+            bridge: BackendBridge instance (Stage 7)
+            qt_signals: QtSignalBridge instance (Stage 7)
+        """
+        if not PYQT6_AVAILABLE:
+            raise ImportError("PyQt6 is required")
+        
         super().__init__()
         
-        # STAGE 1 FIX: Use threading.Lock for thread safety
-        self._update_lock = Lock()
+        print("[DashboardWidget] Initializing (Stage 7)...")
         
-        try:
-            if FPSTracker is not None:
-                self.fps_tracker = FPSTracker(window_size=30)
-            else:
-                self.fps_tracker = None
-                print("[Dashboard] FPSTracker not available")
-            
-            if PerformanceMonitor is not None:
-                self.performance_monitor = PerformanceMonitor()
-                self.performance_monitor.start()
-            else:
-                self.performance_monitor = None
-                print("[Dashboard] PerformanceMonitor not available")
-            
-            self.last_frame_time = time.perf_counter()
-            self._create_ui()
+        # STAGE 7: Store bridge
+        self.bridge = bridge
+        self.qt_signals = qt_signals
         
-        except Exception as e:
-            print(f"[Dashboard] Init error: {e}")
-            traceback.print_exc()
+        # Current metrics
+        self.current_fps = 0.0
+        self.current_cpu = 0.0
+        self.current_gpu = 0.0
+        self.current_memory = 0.0
+        self.current_temp = 0.0
+        
+        # Create UI
+        self._create_ui()
+        
+        # STAGE 7: Connect to Qt signals
+        if self.qt_signals:
+            self._connect_signals()
+        
+        # Update timer (fallback)
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self._query_metrics)
+        self.update_timer.start(100)  # 100ms
+        
+        print("[DashboardWidget] Initialized")
     
     def _create_ui(self):
-        """Create UI"""
-        try:
-            layout = QVBoxLayout(self)
-            
-            # FPS Monitor
-            fps_group = QGroupBox("FPS Monitor")
-            fps_layout = QVBoxLayout(fps_group)
-            
-            self.fps_graph = FPSGraphWidget()
-            fps_layout.addWidget(self.fps_graph)
-            
-            layout.addWidget(fps_group)
-            
-            # Metrics
-            metrics_layout = QHBoxLayout()
-            
-            # FPS Stats
-            fps_metrics_group = QGroupBox("FPS Stats")
-            fps_metrics_layout = QVBoxLayout(fps_metrics_group)
-            
-            self.current_fps_label = QLabel("Current: 0.0 FPS")
-            self.avg_fps_label = QLabel("Average: 0.0 FPS")
-            self.min_fps_label = QLabel("Minimum: 0.0 FPS")
-            self.max_fps_label = QLabel("Maximum: 0.0 FPS")
-            self.frame_time_label = QLabel("Frame Time: 0.0 ms")
-            
-            fps_metrics_layout.addWidget(self.current_fps_label)
-            fps_metrics_layout.addWidget(self.avg_fps_label)
-            fps_metrics_layout.addWidget(self.min_fps_label)
-            fps_metrics_layout.addWidget(self.max_fps_label)
-            fps_metrics_layout.addWidget(self.frame_time_label)
-            
-            metrics_layout.addWidget(fps_metrics_group)
-            
-            # Performance Metrics
-            perf_metrics_group = QGroupBox("Performance")
-            perf_metrics_layout = QVBoxLayout(perf_metrics_group)
-            
-            self.gpu_util_label = QLabel("GPU: 0%")
-            self.cpu_util_label = QLabel("CPU: 0%")
-            self.memory_label = QLabel("Memory: 0 / 0 MB")
-            self.temp_label = QLabel("Temperature: 0°C")
-            self.power_label = QLabel("Power: 0 W")
-            
-            perf_metrics_layout.addWidget(self.gpu_util_label)
-            perf_metrics_layout.addWidget(self.cpu_util_label)
-            perf_metrics_layout.addWidget(self.memory_label)
-            perf_metrics_layout.addWidget(self.temp_label)
-            perf_metrics_layout.addWidget(self.power_label)
-            
-            metrics_layout.addWidget(perf_metrics_group)
-            
-            layout.addLayout(metrics_layout)
+        """Create user interface"""
+        layout = QVBoxLayout(self)
         
-        except Exception as e:
-            print(f"[Dashboard] UI creation error: {e}")
+        # Title
+        title = QLabel("Performance Dashboard")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #00C896;")
+        layout.addWidget(title)
+        
+        # Metrics grid
+        metrics_frame = QFrame()
+        metrics_frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        metrics_layout = QGridLayout(metrics_frame)
+        
+        # FPS
+        self.fps_label = QLabel("FPS: --")
+        self.fps_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #00C896;")
+        metrics_layout.addWidget(QLabel("Frame Rate:"), 0, 0)
+        metrics_layout.addWidget(self.fps_label, 0, 1)
+        
+        # CPU
+        self.cpu_label = QLabel("CPU: --")
+        self.cpu_label.setStyleSheet("font-size: 16px; color: #FFFFFF;")
+        metrics_layout.addWidget(QLabel("CPU Usage:"), 1, 0)
+        metrics_layout.addWidget(self.cpu_label, 1, 1)
+        
+        # GPU
+        self.gpu_label = QLabel("GPU: --")
+        self.gpu_label.setStyleSheet("font-size: 16px; color: #FFFFFF;")
+        metrics_layout.addWidget(QLabel("GPU Usage:"), 2, 0)
+        metrics_layout.addWidget(self.gpu_label, 2, 1)
+        
+        # Memory
+        self.memory_label = QLabel("Memory: --")
+        self.memory_label.setStyleSheet("font-size: 16px; color: #FFFFFF;")
+        metrics_layout.addWidget(QLabel("Memory:"), 3, 0)
+        metrics_layout.addWidget(self.memory_label, 3, 1)
+        
+        # Temperature
+        self.temp_label = QLabel("Temp: --")
+        self.temp_label.setStyleSheet("font-size: 16px; color: #FFFFFF;")
+        metrics_layout.addWidget(QLabel("Temperature:"), 4, 0)
+        metrics_layout.addWidget(self.temp_label, 4, 1)
+        
+        layout.addWidget(metrics_frame)
+        
+        # FPS Graph
+        graph_label = QLabel("FPS History")
+        graph_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
+        layout.addWidget(graph_label)
+        
+        self.fps_graph = FPSGraphWidget()
+        layout.addWidget(self.fps_graph)
+        
+        layout.addStretch()
     
-    def update_data(self):
-        """Update dashboard data
-        
-        Package 3.9a Stage 1 Fix:
-        - Use threading.Lock for proper thread safety
-        - Non-blocking acquire (skip update if locked)
-        """
-        # STAGE 1 FIX: Use Lock.acquire(blocking=False)
-        if not self._update_lock.acquire(blocking=False):
-            # Already updating, skip this cycle
+    def _connect_signals(self):
+        """Connect to Qt signals (Stage 7)"""
+        if not self.qt_signals:
             return
         
         try:
-            if self.fps_tracker is None:
-                return
+            # Data updates
+            self.qt_signals.data_updated.connect(self._on_data_updated)
+            print("[DashboardWidget] Qt signals connected")
+        except Exception as e:
+            print(f"[DashboardWidget] Signal connection error: {e}")
+    
+    def _query_metrics(self):
+        """Query metrics via Bridge (Stage 7)"""
+        if not self.bridge:
+            return
+        
+        try:
+            # STAGE 7: Query via Bridge
+            query = QueryBuilder() \
+                .select(['fps', 'cpu', 'gpu', 'memory_used', 'temperature']) \
+                .build()
             
-            # Update FPS tracker
-            current_time = time.perf_counter()
-            if current_time - self.last_frame_time > 0.001:
-                self.fps_tracker.frame()
-                self.last_frame_time = current_time
+            result = self.bridge.query_data('performance_metrics', query)
             
-            # Get stats
-            stats = self.fps_tracker.get_stats()
-            
-            # Update graph
-            if hasattr(self, 'fps_graph') and self.fps_graph is not None:
-                self.fps_graph.add_fps(stats.current)
+            if result.success and result.data:
+                self._update_display(result.data)
+        
+        except Exception as e:
+            # Silent fail - signals will handle updates
+            pass
+    
+    def _on_data_updated(self, data_type: str, data: dict):
+        """Handle data update signal (Stage 7)"""
+        if data_type == 'performance_metrics':
+            self._update_display(data)
+    
+    def _update_display(self, data: dict):
+        """Update display with new data"""
+        try:
+            # Extract metrics
+            fps = data.get('fps', 0.0)
+            cpu = data.get('cpu', 0.0)
+            gpu = data.get('gpu', 0.0)
+            memory = data.get('memory_used', 0.0)
+            temp = data.get('temperature', 0.0)
             
             # Update labels
-            self.current_fps_label.setText(f"Current: {stats.current:.1f} FPS")
-            self.avg_fps_label.setText(f"Average: {stats.average:.1f} FPS")
-            self.min_fps_label.setText(f"Minimum: {stats.min:.1f} FPS")
-            self.max_fps_label.setText(f"Maximum: {stats.max:.1f} FPS")
-            self.frame_time_label.setText(f"Frame Time: {stats.frame_time:.2f} ms")
+            self.fps_label.setText(f"{fps:.1f}")
+            self.cpu_label.setText(f"{cpu:.1f}%")
+            self.gpu_label.setText(f"{gpu:.1f}%")
+            self.memory_label.setText(f"{memory:.0f} MB")
+            self.temp_label.setText(f"{temp:.1f}°C")
             
-            # Update performance metrics
-            if self.performance_monitor is not None:
-                metrics = self.performance_monitor.get_metrics()
-                
-                if metrics:
-                    self.gpu_util_label.setText(f"GPU: {metrics.gpu_util:.0f}%")
-                    self.cpu_util_label.setText(f"CPU: {metrics.cpu_util:.0f}%")
-                    self.memory_label.setText(
-                        f"Memory: {metrics.memory_used:.0f} / {metrics.memory_total:.0f} MB"
-                    )
-                    self.temp_label.setText(f"Temperature: {metrics.temperature:.0f}°C")
-                    self.power_label.setText(f"Power: {metrics.power_draw:.0f} W")
+            # Update graph
+            self.fps_graph.add_fps(fps)
+            
+            # Store current values
+            self.current_fps = fps
+            self.current_cpu = cpu
+            self.current_gpu = gpu
+            self.current_memory = memory
+            self.current_temp = temp
         
         except Exception as e:
-            print(f"[Dashboard] Update error: {e}")
-            # Don't crash - continue running
-        
-        finally:
-            # STAGE 1 FIX: Always release lock
-            self._update_lock.release()
-    
-    def get_current_fps(self) -> float:
-        """Get current FPS"""
-        try:
-            if self.fps_tracker is None:
-                return 0.0
-            return self.fps_tracker.get_fps()
-        except:
-            return 0.0
-    
-    def clear_history(self):
-        """Clear FPS history"""
-        try:
-            if hasattr(self, 'fps_graph') and self.fps_graph is not None:
-                self.fps_graph.clear()
-            if self.fps_tracker is not None:
-                self.fps_tracker.reset()
-        except Exception as e:
-            print(f"[Dashboard] Clear error: {e}")
-    
-    def cleanup(self):
-        """Clean up resources
-        
-        Package 3.9a Stage 1: Added proper cleanup
-        """
-        try:
-            # Stop performance monitor
-            if hasattr(self, 'performance_monitor') and self.performance_monitor is not None:
-                self.performance_monitor.stop()
-            
-            # Reset FPS tracker
-            if hasattr(self, 'fps_tracker') and self.fps_tracker is not None:
-                self.fps_tracker.reset()
-            
-            # Clean up graph
-            if hasattr(self, 'fps_graph') and self.fps_graph is not None:
-                self.fps_graph.cleanup()
-            
-            print("[Dashboard] Cleaned up successfully")
-        except Exception as e:
-            print(f"[Dashboard] Cleanup error: {e}")
-    
-    def closeEvent(self, event):
-        """Handle close event"""
-        self.cleanup()
-        event.accept()
+            print(f"[DashboardWidget] Display update error: {e}")
