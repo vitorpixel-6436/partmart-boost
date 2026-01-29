@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5s (package 3.9a, stage 7.7b.6.3/7.7 COMPLETE!)
+Version: 0.3.5t (package 3.9a, stage 7.7b.7/7.7 COMPLETE!)
 
-Package 3.9a Stage 7.7b.6: System-wide error recovery. ✅ COMPLETE!
-  - 7.7b.6.1: ErrorReporter - error collection and reporting ✅
-  - 7.7b.6.2: SystemHealthMonitor - health monitoring ✅
-  - 7.7b.6.3: RecoveryCoordinator - auto-recovery ✅
+Package 3.9a Progress:
+  Stage 7.7b.6: System-wide error recovery ✅
+    - 7.7b.6.1: ErrorReporter ✅
+    - 7.7b.6.2: SystemHealthMonitor ✅
+    - 7.7b.6.3: RecoveryCoordinator ✅
+  Stage 7.7b.7: GUI Monitoring Integration ✅
+    - MonitoringPanel widget ✅
+    - Alert notifications ✅
+    - Main window integration ✅
 
 Usage:
     python src/main.py              # Normal launch
@@ -23,9 +28,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5s"
+VERSION = "0.3.5t"
 PACKAGE = "3.9a"
-STAGE = "7.7b.6 COMPLETE! (Error Recovery System)"
+STAGE = "7.7b.7 COMPLETE! (GUI Monitoring Integration)"
 
 
 def print_banner():
@@ -147,19 +152,21 @@ def main():
         
         # Launch GUI (unless --no-gui)
         if not args.no_gui:
-            print("Launching GUI...\n")
+            print("Launching GUI with monitoring...\n")
             
             try:
                 from PyQt6.QtWidgets import QApplication
-                from ui.main_window_stage7 import MainWindowStage7
+                from ui.main_window_monitoring import MainWindowMonitoring
                 
                 app = QApplication(sys.argv)
                 
-                # Create window with integrator
-                window = MainWindowStage7(integrator)
+                # Create window with monitoring integration
+                window = MainWindowMonitoring(integrator)
                 window.show()
                 
                 print("✅ GUI launched successfully")
+                print("✅ Monitoring panel active")
+                print("✅ Alert notifications enabled")
                 print("\nApplication running. Close window to exit.\n")
                 
                 return app.exec()
