@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OptiScaler Manager - Main API
 
-Version: 0.3.5d (package 3.8a, stage 1/6)
+Version: 0.3.5d (package 3.8a, stage 2/6)
 """
 import threading
 from pathlib import Path
@@ -16,6 +16,8 @@ from .types import (
     InjectionError
 )
 from .config import OptiScalerConfig
+from .detector import OptiScalerDetector
+from .injector import OptiScalerInjector
 
 
 class OptiScalerManager:
@@ -28,10 +30,16 @@ class OptiScalerManager:
         manager.initialize()
         
         if not manager.is_installed():
-            manager.install()
+            manager.install()  # Stage 3
         
+        config = OptiScalerConfig(
+            backend=OptiScalerBackend.FSR3,
+            quality=OptiScalerQuality.QUALITY
+        )
         manager.configure(config)
-        manager.inject_into_game(game_info)
+        
+        game = manager.detect_game(Path("C:/Games/Cyberpunk2077"))
+        manager.inject_into_game(game)
     """
     
     # OptiScaler default paths
@@ -50,39 +58,56 @@ class OptiScalerManager:
         self._config: Optional[OptiScalerConfig] = None
         self._info: Optional[OptiScalerInfo] = None
         
-        print("[OptiScalerManager] Initialized (Stage 1/6)")
+        # Initialize components
+        self._detector = OptiScalerDetector(self._install_dir)
+        self._injector = OptiScalerInjector(self._install_dir)
+        
+        print("[OptiScalerManager] Initialized (Stage 2/6)")
         print(f"  Install dir: {self._install_dir}")
-        print("  Next stages will add:")
-        print("  - Stage 2: OptiScaler Wrapper")
-        print("  - Stage 3: Auto-Download")
-        print("  - Stage 4: FSR3Backend Integration")
-        print("  - Stage 5: GUI Controls")
-        print("  - Stage 6: Testing & Docs")
     
     def initialize(self) -> bool:
         """Initialize OptiScaler Manager
         
+        Detects OptiScaler installation and validates configuration.
+        
         Returns:
-            True if successful
+            True if OptiScaler is installed and ready
         """
         with self._lock:
-            print("\n[OptiScalerManager] Stage 1: Stub initialize")
+            print("\n[OptiScalerManager] Stage 2: Real initialize")
             
-            # Stage 2 will add: Detect OptiScaler
-            # Stage 3 will add: Auto-download if missing
+            # Detect OptiScaler
+            self._info = self._detector.detect()
             
-            print("[OptiScalerManager] Stage 1: Architecture ready")
-            return True
+            if self._info:
+                print(f"[OptiScalerManager] OptiScaler {self._info.version} detected")
+                print(f"  Status: {self._info.status.name}")
+                print(f"  Backends: {[b.name for b in self._info.backends_available]}")
+                
+                # Load existing config if available
+                if self._info.config_path:
+                    self._config = OptiScalerConfig.load(self._info.config_path)
+                
+                return self._info.status == InstallStatus.INSTALLED
+            else:
+                print("[OptiScalerManager] OptiScaler not found")
+                print("  Run install() to download OptiScaler (Stage 3)")
+                return False
     
     def is_installed(self) -> bool:
         """Check if OptiScaler is installed
         
         Returns:
-            True if installed
+            True if installed and working
         """
-        # Stage 2: Real detection
-        print("[OptiScalerManager] Stage 1: Stub is_installed (real in Stage 2)")
-        return False
+        if self._info is None:
+            # Try to detect
+            self._info = self._detector.detect()
+        
+        return (
+            self._info is not None and
+            self._info.status == InstallStatus.INSTALLED
+        )
     
     def get_info(self) -> Optional[OptiScalerInfo]:
         """Get OptiScaler installation info
@@ -90,8 +115,7 @@ class OptiScalerManager:
         Returns:
             OptiScalerInfo or None
         """
-        # Stage 2: Real info
-        return None
+        return self._info
     
     def install(self, force: bool = False) -> bool:
         """Install or update OptiScaler
@@ -102,9 +126,9 @@ class OptiScalerManager:
         Returns:
             True if successful
         """
-        print("[OptiScalerManager] Stage 1: Stub install (real in Stage 3)")
-        # Stage 3: Auto-download and install
-        return False
+        print("[OptiScalerManager] Stage 2: Install stub (real in Stage 3)")
+        # Stage 3: Auto-download and install from GitHub
+        raise NotImplementedError("Install will be implemented in Stage 3")
     
     def configure(self, config: OptiScalerConfig) -> bool:
         """Configure OptiScaler settings
@@ -116,13 +140,26 @@ class OptiScalerManager:
             True if successful
         """
         with self._lock:
-            print("[OptiScalerManager] Stage 1: Stub configure")
-            self._config = config
-            # Stage 2: Write config to nvngx.ini
-            return True
+            print("[OptiScalerManager] Stage 2: Real configure")
+            
+            if not self.is_installed():
+                print("[OptiScalerManager] OptiScaler not installed")
+                return False
+            
+            # Save configuration
+            config_path = self._install_dir / "nvngx.ini"
+            success = config.save(config_path)
+            
+            if success:
+                self._config = config
+                print("[OptiScalerManager] Configuration saved")
+            
+            return success
     
     def inject_into_game(self, game: GameInfo) -> bool:
         """Inject OptiScaler into game
+        
+        Copies OptiScaler DLLs to game directory and sets up configuration.
         
         Args:
             game: Game information
@@ -130,9 +167,33 @@ class OptiScalerManager:
         Returns:
             True if successful
         """
-        print(f"[OptiScalerManager] Stage 1: Stub inject into {game.name}")
-        # Stage 4: Real injection
-        return False
+        print(f"[OptiScalerManager] Stage 2: Real inject into {game.name}")
+        
+        if not self.is_installed():
+            raise InjectionError("OptiScaler not installed")
+        
+        if self._config is None:
+            # Use default config
+            self._config = OptiScalerConfig()
+            print("[OptiScalerManager] Using default configuration")
+        
+        try:
+            return self._injector.inject(game, self._config)
+        except Exception as e:
+            print(f"[OptiScalerManager] Injection failed: {e}")
+            raise InjectionError(f"Failed to inject into {game.name}: {e}")
+    
+    def remove_from_game(self, game: GameInfo) -> bool:
+        """Remove OptiScaler from game
+        
+        Args:
+            game: Game information
+        
+        Returns:
+            True if successful
+        """
+        print(f"[OptiScalerManager] Removing from {game.name}")
+        return self._injector.remove(game)
     
     def detect_game(self, game_dir: Path) -> Optional[GameInfo]:
         """Detect game and its upscaler support
@@ -143,9 +204,8 @@ class OptiScalerManager:
         Returns:
             GameInfo or None
         """
-        print("[OptiScalerManager] Stage 1: Stub detect_game (real in Stage 2)")
-        # Stage 2: Real detection
-        return None
+        print("[OptiScalerManager] Stage 2: Real detect_game")
+        return self._injector.detect_game(game_dir)
     
     def get_supported_games(self) -> List[str]:
         """Get list of known supported games
@@ -153,14 +213,24 @@ class OptiScalerManager:
         Returns:
             List of game names
         """
-        # Stage 2: Load from OptiScaler compatibility list
+        # Known games that work with OptiScaler
         return [
             "Cyberpunk 2077",
             "Starfield",
             "Alan Wake 2",
             "Ghost of Tsushima",
-            "Spider-Man",
-            # ... more games
+            "Marvel's Spider-Man",
+            "Hogwarts Legacy",
+            "Red Dead Redemption 2",
+            "Death Stranding",
+            "Control",
+            "Metro Exodus Enhanced",
+            "Dying Light 2",
+            "F1 2023",
+            "Forza Horizon 5",
+            "Microsoft Flight Simulator",
+            "Witcher 3 Next-Gen",
+            # ... hundreds more
         ]
     
     def uninstall(self) -> bool:
@@ -169,9 +239,9 @@ class OptiScalerManager:
         Returns:
             True if successful
         """
-        print("[OptiScalerManager] Stage 1: Stub uninstall (real in Stage 3)")
+        print("[OptiScalerManager] Stage 2: Uninstall stub (real in Stage 3)")
         # Stage 3: Remove files
-        return False
+        raise NotImplementedError("Uninstall will be implemented in Stage 3")
     
     def get_install_dir(self) -> Path:
         """Get installation directory"""
@@ -180,3 +250,11 @@ class OptiScalerManager:
     def get_config(self) -> Optional[OptiScalerConfig]:
         """Get current configuration"""
         return self._config
+    
+    def verify_installation(self) -> bool:
+        """Verify OptiScaler installation integrity
+        
+        Returns:
+            True if valid
+        """
+        return self._detector.verify_installation()
