@@ -1,468 +1,481 @@
-# Error Handling & Robustness
+# Error Handling Guide
 
-**Version:** 0.3.5j (Package 3.9a, Stage 7.7b/7.7)
+**Version:** 0.3.5k (Package 3.9a, Stage 7.7b.2/7.7)
 
 ## Overview
 
-Comprehensive error handling and robustness features for PartMart Boost.
+Comprehensive error handling system for PartMart Boost with logging integration and graceful degradation.
 
-## Components
+## Principles
 
-### 1. Error Handler (`error_handler.py`)
+### 1. **Fail Gracefully**
+Never crash the application due to component failures.
 
-Centralized error handling system.
+### 2. **Log Everything**
+All errors are logged with context and stack traces.
 
-#### Features
+### 3. **Provide Fallbacks**
+Components should have sensible fallback behavior.
 
-- **Error Severity Levels:**
-  - DEBUG 🔍
-  - INFO ℹ️
-  - WARNING ⚠️
-  - ERROR ❌
-  - CRITICAL 🔥
+### 4. **User-Friendly Messages**
+Log technical details, but show user-friendly messages in UI.
 
-- **Error Context:** Captures component, operation, traceback, timestamp
-- **Recovery Strategies:** Automatic error recovery
-- **Statistics:** Error tracking and reporting
-- **Thread-Safe:** Safe for concurrent use
+### 5. **Recover When Possible**
+Attempt to recover from transient errors.
 
-#### Usage
+## Error Handling Patterns
 
-```python
-from core.error_handler import ErrorHandler, ErrorSeverity
-
-handler = ErrorHandler.get_instance()
-
-try:
-    risky_operation()
-except Exception as e:
-    handler.handle_error(
-        component='ComponentName',
-        operation='operation_name',
-        error=e,
-        severity=ErrorSeverity.ERROR,
-        recoverable=True
-    )
-```
-
-#### Recovery Strategies
-
-Register custom recovery functions:
+### Pattern 1: Try-Catch with Logging
 
 ```python
-def recovery_strategy(ctx, context):
-    # Attempt recovery
-    return True  # or False
+from core import logger
 
-handler.register_recovery_strategy(
-    component='Network',
-    operation='connect',
-    strategy=recovery_strategy
-)
+def risky_operation():
+    try:
+        # Risky code
+        result = perform_operation()
+        return result
+    
+    except SpecificError as e:
+        logger.error(f"Operation failed: {e}", component="MyComponent")
+        return default_value
+    
+    except Exception as e:
+        logger.exception("Unexpected error", component="MyComponent")
+        return default_value
 ```
 
-#### Statistics
+### Pattern 2: Validation Before Execution
 
 ```python
-stats = handler.get_stats()
-print(f"Total errors: {stats['total_errors']}")
-print(f"Recovery rate: {stats['recovery_rate']:.1f}%")
-
-handler.print_summary()  # Pretty print
+def set_value(self, key: str, value: Any) -> bool:
+    # Validate input
+    if not key:
+        logger.warning("Empty key provided", component="ConfigManager")
+        return False
+    
+    if value is None:
+        logger.warning(f"None value for {key}", component="ConfigManager")
+        return False
+    
+    try:
+        # Perform operation
+        self._data[key] = value
+        return True
+    
+    except Exception as e:
+        logger.error(f"Failed to set {key}: {e}", component="ConfigManager")
+        return False
 ```
 
-### 2. Logger (`logger.py`)
-
-Multi-level logging system.
-
-#### Features
-
-- **Log Levels:** DEBUG, INFO, WARNING, ERROR, CRITICAL
-- **Output:** Console and file
-- **Colored Console:** Color-coded severity levels
-- **Thread-Safe:** Safe for concurrent logging
-- **Timestamps:** Millisecond precision
-
-#### Usage
+### Pattern 3: Fallback Values
 
 ```python
-from core.logger import Logger, LogLevel
-
-logger = Logger.get_instance()
-
-logger.debug('Debug message', component='MyComponent')
-logger.info('Info message')
-logger.warning('Warning message')
-logger.error('Error message')
-logger.critical('Critical message')
+def get_config(self, key: str, default: Any) -> Any:
+    try:
+        return self._config[key]
+    
+    except KeyError:
+        logger.debug(f"Key not found: {key}, using default", component="Config")
+        return default
+    
+    except Exception as e:
+        logger.error(f"Error getting {key}: {e}", component="Config")
+        return default
 ```
 
-#### Configuration
+### Pattern 4: Resource Cleanup
 
 ```python
-# Set log level
-logger.set_level(LogLevel.DEBUG)
-
-# Custom log file
-logger = Logger(log_file='custom.log', level=LogLevel.INFO)
+def save_file(self, filename: str) -> bool:
+    temp_file = filename + '.tmp'
+    
+    try:
+        # Write to temp file
+        with open(temp_file, 'w') as f:
+            f.write(data)
+        
+        # Atomic replace
+        os.replace(temp_file, filename)
+        return True
+    
+    except Exception as e:
+        logger.error(f"Failed to save {filename}: {e}", component="FileManager")
+        return False
+    
+    finally:
+        # Cleanup temp file
+        if os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except Exception:
+                pass
 ```
 
-#### Output Format
-
-```
-ℹ️ 2026-01-29 02:30:15.123 [INFO][Component] Message
-❌ 2026-01-29 02:30:16.456 [ERROR][Component] Error occurred
-```
-
-### 3. Input Validators (`validators.py`)
-
-Comprehensive input validation.
-
-#### Available Validators
+### Pattern 5: Callback Error Isolation
 
 ```python
-from core.validators import Validator, ValidationError
-
-# Type validation
-Validator.validate_type(value, int, 'param_name')
-Validator.validate_type(value, (int, float))  # Multiple types
-
-# Range validation
-Validator.validate_range(value, min_value=0, max_value=100)
-
-# Not None/Empty
-Validator.validate_not_none(value)
-Validator.validate_not_empty(collection)
-
-# Choice validation
-Validator.validate_choice(value, ['option1', 'option2'])
-
-# String validation
-Validator.validate_string_length(text, min_length=1, max_length=100)
-Validator.validate_regex(text, r'^[a-z]+$')
-
-# Numeric validation
-Validator.validate_positive(value)
-Validator.validate_percentage(value)  # 0-100
-
-# Dictionary validation
-Validator.validate_dict_keys(data, ['key1', 'key2'])
+def _notify_subscribers(self, event: str, data: Any):
+    for callback in self._callbacks:
+        try:
+            callback(event, data)
+        
+        except Exception as e:
+            # Don't let one bad callback break all others
+            logger.error(f"Callback error: {e}", component="EventBus", exc_info=True)
+            # Continue with other callbacks
 ```
 
-#### Safe Validation
+## Component Error Handling
 
+### ConfigManager
+
+**Error Scenarios:**
+- File not found
+- Invalid JSON
+- Permission denied
+- Invalid values
+- Type mismatches
+
+**Handling:**
 ```python
-is_valid, error_msg = Validator.safe_validate(
-    Validator.validate_range,
-    value, 0, 100
-)
+config = ConfigManager('config.json')
 
-if not is_valid:
-    print(f"Validation failed: {error_msg}")
+# Returns default if file missing
+theme = config.get('ui.theme', 'dark')
+
+# Returns False on error
+if not config.set('ui.theme', 'invalid'):
+    print("Failed to set theme")
+
+# Returns False on error
+if not config.save():
+    print("Failed to save config")
 ```
 
-### 4. Graceful Degradation (`graceful_degradation.py`)
+### DataBus
 
-Patterns for handling failures gracefully.
+**Error Scenarios:**
+- Callback exceptions
+- Invalid topics
+- Memory limits
+- Thread errors
 
-#### Circuit Breaker
-
-Prevents cascading failures:
-
+**Handling:**
 ```python
-from core.graceful_degradation import CircuitBreaker
+bus = DataBus()
 
-breaker = CircuitBreaker(
-    failure_threshold=5,
-    timeout=60
-)
+# Callback errors are logged but don't break other subscribers
+def bad_callback(msg):
+    raise Exception("Oops!")
 
-result = breaker.call(lambda: risky_service())
-if result is None:
-    # Circuit is open, use fallback
-    result = fallback_value
+bus.subscribe('test', bad_callback)  # Won't crash the bus
 ```
 
-**States:**
-- CLOSED: Normal operation
-- OPEN: Circuit broken, calls fail immediately
-- HALF_OPEN: Testing recovery
+### PerformanceHistory
 
-#### Retry Strategy
+**Error Scenarios:**
+- Invalid metrics
+- Memory overflow
+- File I/O errors
+- Data corruption
 
-Automatic retry with exponential backoff:
-
+**Handling:**
 ```python
-from core.graceful_degradation import RetryStrategy
+history = PerformanceHistory(max_samples=1000)
 
-retry = RetryStrategy(
-    max_attempts=3,
-    backoff=2.0,
-    max_backoff=30.0
-)
+# Invalid data is rejected
+history.add_snapshot(cpu=-1, gpu=150)  # Logged and ignored
 
-result = retry.execute(
-    lambda: unstable_operation(),
-    on_retry=lambda attempt, error: print(f"Retry {attempt}")
-)
+# Export failures return False
+if not history.export_csv('invalid/path/file.csv'):
+    print("Export failed")
 ```
 
-#### Fallback Chain
+### PerformanceAnalytics
 
-Try multiple strategies:
+**Error Scenarios:**
+- Insufficient data
+- Invalid metrics
+- Calculation errors
+
+**Handling:**
+```python
+analytics = PerformanceAnalytics(history)
+
+# Returns None if not enough data
+report = analytics.analyze()
+if report is None:
+    print("Not enough data for analysis")
+```
+
+## Error Recovery
+
+### Automatic Recovery
+
+**1. Configuration**
+```python
+# If config file corrupted, use defaults
+config = ConfigManager('config.json')
+# Automatically falls back to defaults if file invalid
+```
+
+**2. Monitoring**
+```python
+# If monitoring fails, log and continue
+monitor.start_monitoring()
+# Internal errors logged, app continues
+```
+
+**3. Analytics**
+```python
+# If analytics fail, return None
+report = analytics.analyze()
+if report is None:
+    # App continues without analytics
+    pass
+```
+
+### Manual Recovery
+
+**1. Reset Configuration**
+```python
+# Reset to defaults
+config.reset()
+config.save()
+```
+
+**2. Clear History**
+```python
+# Clear corrupted history
+history.clear()
+```
+
+**3. Restart Component**
+```python
+# Stop and restart monitoring
+monitor.stop_monitoring()
+time.sleep(0.1)
+monitor.start_monitoring()
+```
+
+## Testing Error Handling
+
+### Unit Tests
 
 ```python
-from core.graceful_degradation import FallbackChain
-
-chain = FallbackChain()
-chain.add(primary_method)
-chain.add(backup_method)
-chain.add(lambda: default_value)
-
-result = chain.execute()
+class TestErrorHandling(unittest.TestCase):
+    def test_invalid_config_value(self):
+        config = ConfigManager()
+        
+        # Should return False
+        result = config.set('ui.theme', 123)
+        self.assertFalse(result)
+        
+        # Value should not change
+        theme = config.get('ui.theme')
+        self.assertEqual(theme, 'dark')
+    
+    def test_file_not_found(self):
+        config = ConfigManager('nonexistent.json')
+        
+        # Should use defaults
+        theme = config.get('ui.theme')
+        self.assertEqual(theme, 'dark')
+    
+    def test_callback_exception(self):
+        bus = DataBus()
+        received = []
+        
+        def bad_callback(msg):
+            raise Exception("Error!")
+        
+        def good_callback(msg):
+            received.append(msg.data)
+        
+        bus.subscribe('test', bad_callback)
+        bus.subscribe('test', good_callback)
+        
+        bus.publish('test', {'value': 42})
+        
+        # Good callback should still receive
+        time.sleep(0.01)
+        self.assertEqual(len(received), 1)
 ```
 
 ## Best Practices
 
-### 1. Always Validate Input
+### DO
 
+✅ **Always handle exceptions**
 ```python
-from core.validators import Validator
-
-def set_value(self, value: float):
-    # Validate before use
-    Validator.validate_range(value, 0, 100, 'value')
-    self._value = value
+try:
+    risky_operation()
+except Exception as e:
+    logger.exception("Operation failed", component="MyComponent")
 ```
 
-### 2. Use Error Handler
-
+✅ **Provide fallback values**
 ```python
-from core.error_handler import ErrorHandler, ErrorSeverity
+value = config.get('key', default_value)
+```
 
-handler = ErrorHandler.get_instance()
+✅ **Return success status**
+```python
+def save() -> bool:
+    try:
+        # ...
+        return True
+    except Exception:
+        return False
+```
 
+✅ **Log with context**
+```python
+logger.error(f"Failed to process {filename}", component="FileProcessor", exc_info=True)
+```
+
+✅ **Validate inputs**
+```python
+if not filename or not os.path.exists(filename):
+    logger.warning(f"Invalid file: {filename}")
+    return False
+```
+
+### DON'T
+
+❌ **Don't swallow exceptions silently**
+```python
+# BAD
+try:
+    risky()
+except Exception:
+    pass  # Silent failure!
+
+# GOOD
+try:
+    risky()
+except Exception as e:
+    logger.error(f"Operation failed: {e}", exc_info=True)
+```
+
+❌ **Don't crash on invalid input**
+```python
+# BAD
+def process(data):
+    return data['key']  # KeyError crashes app!
+
+# GOOD
+def process(data):
+    try:
+        return data.get('key', default)
+    except Exception as e:
+        logger.error(f"Processing failed: {e}")
+        return default
+```
+
+❌ **Don't ignore return values**
+```python
+# BAD
+config.save()  # Ignoring return value
+
+# GOOD
+if not config.save():
+    logger.warning("Failed to save config")
+    show_error_message("Could not save settings")
+```
+
+❌ **Don't use bare except**
+```python
+# BAD
 try:
     operation()
-except Exception as e:
-    handler.handle_error(
-        component='MyComponent',
-        operation='my_operation',
-        error=e,
-        severity=ErrorSeverity.ERROR
-    )
+except:  # Catches everything, including KeyboardInterrupt!
+    pass
+
+# GOOD
+try:
+    operation()
+except Exception as e:  # Specific exception handling
+    logger.error(f"Error: {e}")
 ```
 
-### 3. Log Important Events
+## Error Messages
+
+### For Logs (Technical)
 
 ```python
-from core.logger import Logger
-
-logger = Logger.get_instance()
-
-logger.info('Operation started', component='MyComponent')
-# ... operation ...
-logger.info('Operation completed')
-```
-
-### 4. Use Safe Execute
-
-```python
-from core.error_handler import safe_execute
-
-result = safe_execute(
-    func=risky_function,
-    component='MyComponent',
-    operation='risky_op',
-    default=None,
-    arg1=value1,
-    arg2=value2
+logger.error(
+    f"Failed to load config from {filename}: {error}",
+    component="ConfigManager",
+    exc_info=True
 )
 ```
 
-### 5. Implement Fallbacks
+**Include:**
+- What operation failed
+- Which file/resource
+- Error details
+- Stack trace
+
+### For Users (Friendly)
 
 ```python
-from core.graceful_degradation import CircuitBreaker
-
-breaker = CircuitBreaker()
-
-result = breaker.call(external_service)
-if result is None:
-    # Use cached data or default
-    result = get_cached_data()
-```
-
-### 6. Add Recovery Strategies
-
-```python
-def recovery_network(ctx, context):
-    """Attempt network reconnection"""
-    try:
-        # Reconnect logic
-        return True
-    except:
-        return False
-
-handler.register_recovery_strategy(
-    'Network', 'connect', recovery_network
+show_error_dialog(
+    title="Configuration Error",
+    message="Could not load settings. Using defaults.",
+    details="Check logs for details."
 )
 ```
 
-## Error Categories
+**Include:**
+- What went wrong (simple terms)
+- What happens now (fallback)
+- How to fix it (if possible)
 
-### 1. Recoverable Errors
+## Debugging
 
-- Network timeouts
-- Temporary file access issues
-- Resource temporarily unavailable
-
-**Action:** Retry with backoff, use circuit breaker
-
-### 2. Non-Recoverable Errors
-
-- Invalid configuration
-- Missing required files
-- Permission denied
-
-**Action:** Log error, use fallback, notify user
-
-### 3. Fatal Errors
-
-- Out of memory
-- Critical system failure
-- Corrupted data
-
-**Action:** Log, graceful shutdown, error report
-
-## Integration Example
+### Enable Debug Logging
 
 ```python
-from core.error_handler import ErrorHandler, ErrorSeverity
-from core.logger import Logger
-from core.validators import Validator
-from core.graceful_degradation import CircuitBreaker
+from core.logger import AppLogger
+import logging
 
-class MyComponent:
-    def __init__(self):
-        self.logger = Logger.get_instance()
-        self.error_handler = ErrorHandler.get_instance()
-        self.breaker = CircuitBreaker()
-    
-    def process(self, value: float):
-        """Process with full error handling"""
-        try:
-            # 1. Validate input
-            Validator.validate_range(value, 0, 100, 'value')
-            
-            # 2. Log start
-            self.logger.info(f'Processing value: {value}', 
-                           component='MyComponent')
-            
-            # 3. Execute with circuit breaker
-            result = self.breaker.call(
-                lambda: self._risky_operation(value)
-            )
-            
-            if result is None:
-                # 4. Use fallback
-                self.logger.warning('Using fallback', 
-                                  component='MyComponent')
-                result = self._fallback_operation(value)
-            
-            # 5. Log success
-            self.logger.info('Processing complete', 
-                           component='MyComponent')
-            
-            return result
-        
-        except Exception as e:
-            # 6. Handle error
-            self.error_handler.handle_error(
-                component='MyComponent',
-                operation='process',
-                error=e,
-                severity=ErrorSeverity.ERROR,
-                recoverable=False
-            )
-            return None
+logger = AppLogger.get_instance()
+logger.set_level(logging.DEBUG)
 ```
 
-## Performance Impact
+### Check Log Files
 
-### Logging
-
-- **Console:** ~0.1ms per log
-- **File:** ~0.5ms per log
-- **Recommendation:** Use INFO level in production, DEBUG in development
-
-### Error Handler
-
-- **Overhead:** ~0.05ms per error
-- **Memory:** ~1KB per error in history
-- **Recommendation:** Set max_errors appropriately
-
-### Validation
-
-- **Overhead:** ~0.01ms per validation
-- **Recommendation:** Validate at API boundaries only
-
-### Circuit Breaker
-
-- **Overhead:** ~0.02ms per call
-- **Benefit:** Prevents cascading failures
-
-## Testing
-
-### Error Handler Test
-
-```bash
-python src/core/error_handler.py
+```
+logs/partmart_boost.log
 ```
 
-### Logger Test
+### Common Error Patterns
 
-```bash
-python src/core/logger.py
+**1. Permission Denied**
+```
+[ERROR] [ConfigManager] Permission denied: config.json
 ```
 
-### Validators Test
+**Solution:** Run with appropriate permissions or change file location.
 
-```bash
-python src/core/validators.py
+**2. Invalid JSON**
+```
+[ERROR] [ConfigManager] Invalid JSON: Expecting ',' delimiter: line 5 column 10
 ```
 
-### Graceful Degradation Test
+**Solution:** Fix JSON syntax or delete file to use defaults.
 
-```bash
-python src/core/graceful_degradation.py
+**3. Import Error**
+```
+[ERROR] [SystemInit] Failed to import module: No module named 'PyQt6'
 ```
 
-## Troubleshooting
+**Solution:** Install missing dependencies.
 
-### Logger not writing to file
+## See Also
 
-- Check directory permissions
-- Verify log directory exists
-- Check disk space
-
-### Error handler missing errors
-
-- Check severity level
-- Verify error is being caught
-- Check max_errors limit
-
-### Circuit breaker always open
-
-- Check failure_threshold
-- Verify timeout is appropriate
-- Reset circuit: `breaker.reset()`
-
-## Future Enhancements
-
-- [ ] Remote error reporting
-- [ ] Error aggregation
-- [ ] Prometheus metrics
-- [ ] Sentry integration
-- [ ] Custom error handlers per component
-- [ ] Error rate limiting
+- [Logging System](LOGGING.md)
+- [Configuration System](CONFIG.md)
+- [Testing Guide](../tests/README.md)

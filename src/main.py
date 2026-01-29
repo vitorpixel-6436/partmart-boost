@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5j (package 3.9a, stage 7.7b.1/7.7)
+Version: 0.3.5k (package 3.9a, stage 7.7b.2/7.7)
 
-Package 3.9a Stage 7.7b.1: Logging infrastructure.
+Package 3.9a Stage 7.7b.2: Error handling in core components.
 
 Usage:
     python src/main.py              # Normal launch
@@ -20,9 +20,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5j"
+VERSION = "0.3.5k"
 PACKAGE = "3.9a"
-STAGE = "7.7b.1/7.7"
+STAGE = "7.7b.2/7.7"
 
 
 def print_banner():
