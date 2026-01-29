@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """System Integrator Final - Complete system integration with REAL components
 
-Version: 0.3.5d (package 3.9a, stage 7.7c COMPLETE)
+Version: 0.3.5d_hotfix2 (package 3.9a, stage 7.7d_hotfix2)
 
 Integrates all real components:
 - PerformanceMonitor (psutil/pynvml)
 - GameDetector (process detection)
-- FSRManager (FSR library management)
+- FSRManager (FSR 3.x library management)
 - DLLInjector (Windows DLL injection)
+- GameProfileManager (per-game settings)
+- AutoInjectionManager (automatic FSR injection)
 - All infrastructure from Stage 7.7b
 
 NO STUBS - REAL WORKING SYSTEM!
@@ -50,7 +52,7 @@ try:
 except ImportError:
     DataAggregator = None
 
-# NEW: Real components from Stage 7.7c
+# Real components from Stage 7.7c
 try:
     from core.performance_monitor import get_performance_monitor, PerformanceMonitor
 except ImportError:
@@ -77,6 +79,19 @@ except ImportError:
     DLLInjector = None
     get_dll_injector = None
 
+# New components from Stage 7.7d
+try:
+    from core.game_profile_manager import get_profile_manager, GameProfileManager
+except ImportError:
+    GameProfileManager = None
+    get_profile_manager = None
+
+try:
+    from core.auto_injection_manager import get_auto_injection_manager, AutoInjectionManager
+except ImportError:
+    AutoInjectionManager = None
+    get_auto_injection_manager = None
+
 
 @dataclass
 class SystemStatus:
@@ -94,13 +109,15 @@ class SystemStatus:
 class SystemIntegratorFinal:
     """Complete system integration with REAL components
     
-    v0.3.5d - Stage 7.7c: Real implementation
+    v0.3.5d_hotfix2 - Stage 7.7d: Real implementation + Game Profiles
     
     Integrates:
     - Performance monitoring (CPU/GPU/RAM)
     - Game detection (automatic)
-    - FSR management (library handling)
+    - FSR 3.x management (library handling + frame generation)
     - DLL injection (auto-injection)
+    - Game profiles (per-game settings)
+    - Auto-injection system
     - Error recovery
     - Historical data
     - Configuration
@@ -129,41 +146,42 @@ class SystemIntegratorFinal:
         self.fsr_manager = None
         self.dll_injector = None
         
-        # Auto-injection tracking
-        self._injected_games = set()
+        # New components (Stage 7.7d)
+        self.profile_manager = None
+        self.auto_injection_manager = None
     
     def initialize(self) -> bool:
         """Initialize all systems"""
         if self._initialized:
             return True
         
-        print("Initializing PartMart Boost v0.3.5d...")
+        print("Initializing PartMart Boost v0.3.5d_hotfix2...")
         
         try:
             # Load configuration
             if self.config_manager:
                 self.config_manager.load()
-                print("✅ Configuration loaded")
+                print("[+] Configuration loaded")
             
             # Initialize infrastructure
             if get_error_reporter:
                 self.error_reporter = get_error_reporter()
-                print("✅ Error reporter ready")
+                print("[+] Error reporter ready")
             
             if get_health_monitor:
                 self.health_monitor = get_health_monitor()
-                print("✅ Health monitor ready")
+                print("[+] Health monitor ready")
             
             if get_recovery_coordinator:
                 self.recovery_coordinator = get_recovery_coordinator()
                 if self.error_reporter and self.health_monitor:
                     self.recovery_coordinator.set_error_reporter(self.error_reporter)
                     self.recovery_coordinator.set_health_monitor(self.health_monitor)
-                print("✅ Recovery coordinator ready")
+                print("[+] Recovery coordinator ready")
             
             if HistoricalDataStore:
                 self.historical_store = HistoricalDataStore('data/history.db')
-                print("✅ Historical data store ready")
+                print("[+] Historical data store ready")
             
             if DataAggregator:
                 self.data_aggregator = DataAggregator(
@@ -172,26 +190,43 @@ class SystemIntegratorFinal:
                     recovery_coordinator=self.recovery_coordinator,
                     historical_store=self.historical_store
                 )
-                print("✅ Data aggregator ready")
+                print("[+] Data aggregator ready")
             
             # Initialize REAL components (Stage 7.7c)
             if get_performance_monitor:
                 self.performance_monitor = get_performance_monitor()
-                print("✅ Performance monitor ready (psutil/pynvml)")
+                print("[+] Performance monitor ready (CPU/GPU/RAM)")
             
             if get_game_detector:
                 self.game_detector = get_game_detector()
-                # Register callback for auto-injection
-                self.game_detector.register_callback(self._on_game_event)
-                print("✅ Game detector ready")
+                print("[+] Game detector ready (40+ games)")
             
             if get_fsr_manager:
                 self.fsr_manager = get_fsr_manager()
-                print("✅ FSR manager ready")
+                print("[+] FSR 3.x manager ready (frame generation)")
             
             if get_dll_injector:
                 self.dll_injector = get_dll_injector()
-                print("✅ DLL injector ready")
+                print("[+] DLL injector ready")
+            
+            # Initialize NEW components (Stage 7.7d)
+            if get_profile_manager:
+                self.profile_manager = get_profile_manager()
+                print("[+] Game profile manager ready")
+            
+            if get_auto_injection_manager:
+                self.auto_injection_manager = get_auto_injection_manager()
+                print("[+] Auto-injection manager ready")
+                
+                # Register callback for game detection
+                if self.game_detector:
+                    def on_game_event(event_type, game):
+                        if event_type == 'detected':
+                            self.auto_injection_manager.handle_game_detected(game)
+                        elif event_type == 'closed':
+                            self.auto_injection_manager.handle_game_closed(game)
+                    
+                    self.game_detector.register_callback(on_game_event)
             
             # Register components with health monitor
             if self.health_monitor:
@@ -203,15 +238,19 @@ class SystemIntegratorFinal:
                     self.health_monitor.register_component(self.fsr_manager)
                 if self.dll_injector:
                     self.health_monitor.register_component(self.dll_injector)
+                if self.profile_manager:
+                    self.health_monitor.register_component(self.profile_manager)
+                if self.auto_injection_manager:
+                    self.health_monitor.register_component(self.auto_injection_manager)
             
             self._initialized = True
-            print("
-✅ PartMart Boost initialized successfully!")
-            print("   Stage 7.7c: REAL monitoring + FSR integration")
+            print("")
+            print("[+] PartMart Boost initialized successfully!")
+            print("    Stage 7.7d: FSR 3.x + Game Profiles + Auto-Injection")
             return True
         
         except Exception as e:
-            print(f"❌ Initialization failed: {e}")
+            print(f"[-] Initialization failed: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -225,7 +264,8 @@ class SystemIntegratorFinal:
         if self._running:
             return True
         
-        print("\nStarting PartMart Boost systems...")
+        print("")
+        print("Starting PartMart Boost systems...")
         
         try:
             self._start_time = time.time()
@@ -233,24 +273,28 @@ class SystemIntegratorFinal:
             # Start performance monitor
             if self.performance_monitor:
                 self.performance_monitor.start()
-                print("✅ Performance monitoring started")
+                print("[+] Performance monitoring started")
             
             # Start game detector
             if self.game_detector:
                 self.game_detector.start()
-                print("✅ Game detection started")
+                print("[+] Game detection started")
             
             # Start data aggregator
             if self.data_aggregator:
                 self.data_aggregator.start()
-                print("✅ Data aggregation started")
+                print("[+] Data aggregation started")
             
             self._running = True
-            print("\n✅ All systems running!")
+            print("")
+            print("[+] All systems running!")
+            print("    Monitoring: CPU, GPU, RAM")
+            print("    Detecting: 40+ games")
+            print("    FSR 3.x: Ready for injection")
             return True
         
         except Exception as e:
-            print(f"❌ Start failed: {e}")
+            print(f"[-] Start failed: {e}")
             return False
     
     def stop(self) -> bool:
@@ -258,54 +302,33 @@ class SystemIntegratorFinal:
         if not self._running:
             return True
         
-        print("\nStopping PartMart Boost systems...")
+        print("")
+        print("Stopping PartMart Boost systems...")
         
         try:
             # Stop data aggregator
             if self.data_aggregator:
                 self.data_aggregator.stop()
-                print("✅ Data aggregation stopped")
+                print("[+] Data aggregation stopped")
             
             # Stop game detector
             if self.game_detector:
                 self.game_detector.stop()
-                print("✅ Game detection stopped")
+                print("[+] Game detection stopped")
             
             # Stop performance monitor
             if self.performance_monitor:
                 self.performance_monitor.stop()
-                print("✅ Performance monitoring stopped")
+                print("[+] Performance monitoring stopped")
             
             self._running = False
-            print("\n✅ All systems stopped")
+            print("")
+            print("[+] All systems stopped")
             return True
         
         except Exception as e:
-            print(f"❌ Stop failed: {e}")
+            print(f"[-] Stop failed: {e}")
             return False
-    
-    def _on_game_event(self, event_type: str, game: 'GameProcess'):
-        """Handle game detection events (auto-injection)"""
-        if event_type == 'detected' and self.fsr_manager and self.dll_injector:
-            # Check if we should auto-inject
-            if game.pid not in self._injected_games:
-                print(f"\n🎮 Game detected: {game.display_name}")
-                
-                # Load game config
-                game_config = self.fsr_manager.load_game_config(game.name)
-                if game_config and game_config.enabled:
-                    print(f"   FSR config found: {game_config.preset.value}")
-                    # TODO: Implement auto-injection logic
-                    # self._inject_fsr(game, game_config)
-                else:
-                    print("   No FSR config - skipping injection")
-                
-                self._injected_games.add(game.pid)
-        
-        elif event_type == 'closed':
-            # Remove from tracking
-            if game.pid in self._injected_games:
-                self._injected_games.remove(game.pid)
     
     def get_status(self) -> SystemStatus:
         """Get current system status"""
@@ -330,7 +353,9 @@ class SystemIntegratorFinal:
             games_detected = len(self.game_detector.get_detected_games())
         
         # FSR status
-        fsr_active = len(self._injected_games) > 0
+        fsr_active = False
+        if self.auto_injection_manager:
+            fsr_active = len(self.auto_injection_manager.get_injected_games()) > 0
         
         return SystemStatus(
             initialized=self._initialized,
@@ -347,10 +372,11 @@ class SystemIntegratorFinal:
         """Print current status"""
         status = self.get_status()
         
-        print("\n" + "="*60)
-        print("  PartMart Boost v0.3.5d - System Status")
-        print("  Stage 7.7c: Real Monitoring + FSR")
-        print("="*60)
+        print("")
+        print("=" * 60)
+        print("  PartMart Boost v0.3.5d_hotfix2 - System Status")
+        print("  Stage 7.7d: FSR 3.x + Game Profiles")
+        print("=" * 60)
         print(f"Initialized: {'Yes' if status.initialized else 'No'}")
         print(f"Running: {'Yes' if status.running else 'No'}")
         print(f"Uptime: {status.uptime:.1f}s")
@@ -363,44 +389,54 @@ class SystemIntegratorFinal:
         if self.game_detector:
             games = self.game_detector.get_detected_games()
             if games:
-                print("\nDetected Games:")
+                print("")
+                print("Detected Games:")
                 for game in games:
-                    print(f"  • {game.display_name} (PID: {game.pid})")
+                    injected = ""
+                    if self.auto_injection_manager:
+                        if self.auto_injection_manager.is_injected(game.pid):
+                            injected = " [FSR INJECTED]"
+                    print(f"  - {game.display_name} (PID: {game.pid}){injected}")
                     print(f"    CPU: {game.cpu_percent:.1f}%, RAM: {game.memory_mb:.0f} MB")
         
         # Print performance metrics
         if self.performance_monitor:
             metrics = self.performance_monitor.get_current_metrics()
             if metrics:
-                print("\nPerformance:")
+                print("")
+                print("Performance:")
                 print(f"  CPU: {metrics.cpu_percent:.1f}%")
                 print(f"  RAM: {metrics.ram_percent:.1f}%")
                 if metrics.gpu_percent is not None:
                     print(f"  GPU: {metrics.gpu_percent:.1f}%")
                     if metrics.gpu_temp:
-                        print(f"  GPU Temp: {metrics.gpu_temp:.1f}°C")
+                        print(f"  GPU Temp: {metrics.gpu_temp:.1f} C")
         
-        print("="*60 + "\n")
+        print("=" * 60)
+        print("")
 
 
 if __name__ == '__main__':
     # Test system integrator
-    print("Testing SystemIntegratorFinal v0.3.5d...\n")
+    print("Testing SystemIntegratorFinal v0.3.5d_hotfix2...")
+    print("")
     
     integrator = SystemIntegratorFinal()
     
     # Initialize
     if not integrator.initialize():
-        print("❌ Initialization failed")
+        print("[-] Initialization failed")
         exit(1)
     
     # Start
     if not integrator.start():
-        print("❌ Start failed")
+        print("[-] Start failed")
         exit(1)
     
     # Run for 15 seconds
-    print("\nRunning for 15 seconds...\n")
+    print("")
+    print("Running for 15 seconds...")
+    print("")
     for i in range(15):
         time.sleep(1)
         if i % 5 == 4:
@@ -409,4 +445,5 @@ if __name__ == '__main__':
     # Stop
     integrator.stop()
     
-    print("\n✅ System Integrator test complete!")
+    print("")
+    print("[+] System Integrator test complete!")
