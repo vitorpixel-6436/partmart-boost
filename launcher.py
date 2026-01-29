@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PartMart Boost Launcher
 
-Version: 0.3.5e (Package 3.9a, Stage 7.8a)
+Version: 0.3.5d (Package 3.9a, Stage 7.8a)
 
 Launcher with new Liquid Glass UI option
 """
@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 # Version info
-VERSION = '0.3.5e'
+VERSION = '0.3.5d'
 PACKAGE = '3.9a'
 STAGE = '7.8a'
 
