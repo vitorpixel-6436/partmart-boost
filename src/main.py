@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5p (package 3.9a, stage 7.7b.5.3/7.7)
+Version: 0.3.5q (package 3.9a, stage 7.7b.6.1/7.7)
 
-Package 3.9a Stage 7.7b.5: Service layer error handling complete!
-  - 7.7b.5.1: PerformanceMonitor error handling
-  - 7.7b.5.2: GameDetectionService error handling
-  - 7.7b.5.3: BackendServiceManager error handling
+Package 3.9a Stage 7.7b.6: System-wide error recovery.
+  - 7.7b.6.1: ErrorReporter - error collection and reporting
+  - 7.7b.6.2: SystemHealthMonitor (next)
+  - 7.7b.6.3: RecoveryCoordinator (next)
 
 Usage:
     python src/main.py              # Normal launch
@@ -23,9 +23,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5p"
+VERSION = "0.3.5q"
 PACKAGE = "3.9a"
-STAGE = "7.7b.5.3/7.7 (Service Layer Complete!)"
+STAGE = "7.7b.6.1/7.7 (ErrorReporter Complete!)"
 
 
 def print_banner():
@@ -146,7 +146,7 @@ def main():
             integrator.print_status()
         
         # Launch GUI (unless --no-gui)
-        if not args.no-gui:
+        if not args.no_gui:
             print("Launching GUI...\n")
             
             try:
