@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5e (package 3.9a, stage 7.7b.8.1 COMPLETE!)
+Version: 0.3.5f (package 3.9a, stage 7.7b.8.2 COMPLETE!)
 
 Package 3.9a Progress:
   Stage 7.7b.6: System-wide error recovery ✅
@@ -14,7 +14,7 @@ Package 3.9a Progress:
     - Main window integration ✅
   Stage 7.7b.8: Advanced Features 🔄
     - 7.7b.8.1: Historical Data System ✅
-    - 7.7b.8.2: Charts & Visualization ⏳
+    - 7.7b.8.2: Charts & Visualization ✅
     - 7.7b.8.3: Search & Dashboard ⏳
 
 Usage:
@@ -32,9 +32,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5e"
+VERSION = "0.3.5f"
 PACKAGE = "3.9a"
-STAGE = "7.7b.8.1 COMPLETE! (Historical Data System)"
+STAGE = "7.7b.8.2 COMPLETE! (Charts & Visualization)"
 
 
 def print_banner():
@@ -156,7 +156,7 @@ def main():
         
         # Launch GUI (unless --no-gui)
         if not args.no_gui:
-            print("Launching GUI with monitoring...\n")
+            print("Launching GUI with monitoring and charts...\n")
             
             try:
                 from PyQt6.QtWidgets import QApplication
@@ -172,6 +172,7 @@ def main():
                 print("✅ Monitoring panel active")
                 print("✅ Alert notifications enabled")
                 print("✅ Historical data collection active")
+                print("✅ Chart visualization available")
                 print("\nApplication running. Close window to exit.\n")
                 
                 return app.exec()
