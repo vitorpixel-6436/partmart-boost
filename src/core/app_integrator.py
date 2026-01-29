@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Application Integrator
 
-Version: 0.3.5e (package 3.9a, stage 7.1/7.7)
+Version: 0.3.5e (package 3.9a, stage 7.2/7.7)
 
 Unified access point for all application components.
 
-Package 3.9a Stage 7.1: Application integration layer.
+Package 3.9a Stage 7.2: Backend services integration.
 
 Features:
 - Unified component access
 - Lazy loading
 - Health monitoring
 - Graceful degradation
+- Service manager access
 """
 import time
 from typing import Optional, Dict, Any
@@ -26,8 +27,9 @@ class AppIntegrator:
     Components:
     - BackendBridge: API for backend operations
     - QtSignalBridge: Thread-safe Qt signals
-    - PerformanceMonitor: Performance monitoring (Stage 7.2)
-    - ConfigManager: Configuration management (Stage 7.2)
+    - BackendServiceManager: Backend services (Stage 7.2)
+    - PerformanceMonitor: Performance monitoring
+    - ConfigManager: Configuration management (Stage 7.3)
     - DataBus: Event-based data transport
     
     Usage:
@@ -36,6 +38,7 @@ class AppIntegrator:
         # Get components
         bridge = integrator.get_bridge()
         qt_signals = integrator.get_qt_signals()
+        monitor = integrator.get_monitor()
         
         # Check health
         health = integrator.get_health()
@@ -52,6 +55,7 @@ class AppIntegrator:
         """Initialize integrator"""
         self._bridge = None
         self._qt_signals = None
+        self._service_manager = None
         self._monitor = None
         self._config = None
         self._data_bus = None
@@ -85,8 +89,6 @@ class AppIntegrator:
         except Exception as e:
             print(f"[AppIntegrator] ⚠️ QtSignalBridge error: {e}")
         
-        # Backend services will be initialized in Stage 7.2
-        
         self._initialized = True
     
     @classmethod
@@ -97,6 +99,19 @@ class AppIntegrator:
                 if cls._instance is None:
                     cls._instance = cls()
         return cls._instance
+    
+    def set_service_manager(self, service_manager):
+        """Set BackendServiceManager (Stage 7.2)
+        
+        Args:
+            service_manager: BackendServiceManager instance
+        """
+        self._service_manager = service_manager
+        
+        # Get monitor from service manager
+        if service_manager:
+            self._monitor = service_manager.get_monitor()
+            print("[AppIntegrator] ✅ ServiceManager connected")
     
     def get_bridge(self):
         """Get BackendBridge
@@ -114,8 +129,16 @@ class AppIntegrator:
         """
         return self._qt_signals
     
+    def get_service_manager(self):
+        """Get BackendServiceManager (Stage 7.2)
+        
+        Returns:
+            BackendServiceManager instance or None
+        """
+        return self._service_manager
+    
     def get_monitor(self):
-        """Get PerformanceMonitor (Stage 7.2)
+        """Get PerformanceMonitor
         
         Returns:
             PerformanceMonitor instance or None
@@ -123,7 +146,7 @@ class AppIntegrator:
         return self._monitor
     
     def get_config(self):
-        """Get ConfigManager (Stage 7.2)
+        """Get ConfigManager (Stage 7.3)
         
         Returns:
             ConfigManager instance or None
@@ -156,7 +179,8 @@ class AppIntegrator:
             'integrator': 'ok' if self._initialized else 'error',
             'bridge': 'ok' if self._bridge else 'unavailable',
             'qt_signals': 'ok' if self._qt_signals else 'unavailable',
-            'monitor': 'pending' if self._monitor is None else 'ok',
+            'service_manager': 'ok' if self._service_manager else 'unavailable',
+            'monitor': 'ok' if self._monitor else 'unavailable',
             'config': 'pending' if self._config is None else 'ok',
             'data_bus': 'pending' if self._data_bus is None else 'ok',
         }

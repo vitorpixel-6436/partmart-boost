@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """System Initialization
 
-Version: 0.3.5e (package 3.9a, stage 7.1/7.7)
+Version: 0.3.5e (package 3.9a, stage 7.2/7.7)
 
 System initialization manager for proper startup sequence.
 
-Package 3.9a Stage 7.1: System initialization and bootstrap.
+Package 3.9a Stage 7.2: Backend services integration.
 
 Features:
 - Dependency validation
 - Component initialization
+- Backend services integration
 - Error recovery
 - Health checks
 """
@@ -42,11 +43,12 @@ class SystemInitializer:
     1. Check dependencies
     2. Initialize BackendBridge
     3. Create QtSignalBridge
-    4. Register command handlers
-    5. Register query handlers
-    6. Initialize backend services
-    7. Start data collection
-    8. Ready for UI
+    4. Initialize BackendServiceManager (NEW in Stage 7.2)
+    5. Register command handlers
+    6. Register query handlers
+    7. Start monitoring
+    8. Create AppIntegrator
+    9. Ready for UI
     
     Usage:
         init = SystemInitializer()
@@ -66,6 +68,7 @@ class SystemInitializer:
         self.mode = mode
         self.results: List[InitResult] = []
         self._integrator = None
+        self._service_manager = None
         
         print(f"[SystemInit] Mode: {mode}")
     
@@ -117,9 +120,12 @@ class SystemInitializer:
                     time_ms=(time.perf_counter() - start_time) * 1000
                 )
             
-            # Step 4: Initialize backend services
+            # Step 4: Initialize backend services (NEW in Stage 7.2)
             services_result = self._init_backend_services()
             self.results.append(services_result)
+            
+            if not services_result.success:
+                print(f"[SystemInit] ⚠️ Backend services failed (non-critical)")
             
             # Step 5: Create AppIntegrator
             integrator_result = self._create_integrator()
@@ -302,23 +308,59 @@ class SystemInitializer:
             )
     
     def _init_backend_services(self) -> InitResult:
-        """Initialize backend services"""
+        """Initialize backend services (Stage 7.2)"""
         start_time = time.perf_counter()
         warnings = []
         
         print("[SystemInit] Initializing backend services...")
         
-        # Backend services will be initialized in Stage 7.2
-        # For now, just placeholder
+        try:
+            from backend_service_manager import BackendServiceManager
+            
+            # Create service manager
+            self._service_manager = BackendServiceManager()
+            
+            # Initialize services
+            success = self._service_manager.initialize()
+            
+            if success:
+                print("[SystemInit] ✅ Backend services initialized")
+                
+                return InitResult(
+                    success=True,
+                    component='backend_services',
+                    time_ms=(time.perf_counter() - start_time) * 1000
+                )
+            else:
+                warnings.append("Backend services initialization failed")
+                
+                return InitResult(
+                    success=False,
+                    component='backend_services',
+                    error="Initialization failed",
+                    warnings=warnings,
+                    time_ms=(time.perf_counter() - start_time) * 1000
+                )
         
-        print("[SystemInit] ✅ Backend services ready (Stage 7.2)")
+        except ImportError as e:
+            warnings.append(f"Backend services unavailable: {e}")
+            
+            print(f"[SystemInit] ⚠️ Backend services unavailable: {e}")
+            
+            return InitResult(
+                success=False,
+                component='backend_services',
+                warnings=warnings,
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
         
-        return InitResult(
-            success=True,
-            component='backend_services',
-            warnings=["Backend services integration pending (Stage 7.2)"],
-            time_ms=(time.perf_counter() - start_time) * 1000
-        )
+        except Exception as e:
+            return InitResult(
+                success=False,
+                component='backend_services',
+                error=str(e),
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
     
     def _create_integrator(self) -> InitResult:
         """Create AppIntegrator"""
@@ -330,6 +372,10 @@ class SystemInitializer:
             from app_integrator import AppIntegrator
             
             self._integrator = AppIntegrator()
+            
+            # Set service manager if available
+            if self._service_manager:
+                self._integrator.set_service_manager(self._service_manager)
             
             print("[SystemInit] ✅ AppIntegrator created")
             
@@ -354,6 +400,14 @@ class SystemInitializer:
             AppIntegrator instance or None
         """
         return self._integrator
+    
+    def get_service_manager(self):
+        """Get BackendServiceManager instance (Stage 7.2)
+        
+        Returns:
+            BackendServiceManager instance or None
+        """
+        return self._service_manager
     
     def get_results(self) -> List[InitResult]:
         """Get initialization results
