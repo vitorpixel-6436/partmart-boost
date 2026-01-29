@@ -1,78 +1,74 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.4.0-alpha
+Version: 0.3.5e (package 3.9a, stage 7/7)
 
-GUI launcher with PyQt6.
+Package 3.9a Stage 7: Integration & Debug
+- Initialize AppIntegrator
+- Setup all systems before UI
+- Graceful fallback
 """
 import sys
-from pathlib import Path
+import os
 
-print("="*80)
-print("🚀 PARTMART BOOST")
-print("Version: 0.4.0-alpha")
-print("="*80)
+# Add src to path
+sys.path.insert(0, os.path.dirname(__file__))
 
-# Check Python version
-if sys.version_info < (3, 8):
-    print("\n❌ Error: Python 3.8+ required")
-    print(f"   Current: Python {sys.version_info.major}.{sys.version_info.minor}")
-    sys.exit(1)
+print("[Main] Starting PartMart Boost v0.3.5e...")
+print("[Main] Package 3.9a - Stage 7: Integration & Debug")
 
-print(f"\n✅ Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+# STAGE 7: Initialize integration layer BEFORE creating UI
+try:
+    from core.app_integration import initialize_app, get_integrator
+    
+    print("[Main] Initializing application systems...")
+    if initialize_app():
+        print("[Main] ✅ All systems initialized successfully!")
+        integrator = get_integrator()
+    else:
+        print("[Main] ⚠️ Some systems failed to initialize, continuing with fallback...")
+        integrator = None
 
-# Try to import PyQt6
+except Exception as e:
+    print(f"[Main] ⚠️ Integration layer not available: {e}")
+    print("[Main] Continuing without BackendBridge...")
+    integrator = None
+
+# Now import and create UI
 try:
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import Qt
-    print("✅ PyQt6 imported")
-except ImportError as e:
-    print("\n❌ PyQt6 not found")
-    print("\nInstall it:")
-    print("  pip install PyQt6")
-    print("\nOr use CLI mode:")
-    print("  python src/main_cli.py")
-    sys.exit(1)
-
-# Import main window
-try:
     from gui.main_window import MainWindow
-    print("✅ GUI modules loaded")
-except ImportError as e:
-    print(f"\n❌ Error loading GUI: {e}")
-    print("\nMake sure all dependencies are installed:")
-    print("  pip install -r requirements.txt")
-    sys.exit(1)
-
-print("\n[*] Starting GUI...\n")
-
-try:
-    # Create application
+    
+    print("[Main] Creating Qt application...")
+    
+    # Enable high DPI scaling
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+    
     app = QApplication(sys.argv)
     app.setApplicationName("PartMart Boost")
+    app.setApplicationVersion("0.3.5e")
     
-    # Create and show main window
-    window = MainWindow()
+    print("[Main] Creating main window...")
+    
+    # STAGE 7: Pass integrator to MainWindow
+    window = MainWindow(integrator=integrator)
     window.show()
     
-    print("✅ GUI started successfully")
-    print("\n" + "="*80)
-    print("GUI is running - check the window!")
-    print("="*80 + "\n")
+    print("[Main] ✅ Application started successfully!")
+    print("[Main] UI rendering...")
     
-    # Run application
     sys.exit(app.exec())
 
+except ImportError as e:
+    print(f"[Main] ❌ PyQt6 not available: {e}")
+    print("[Main] Please install: pip install PyQt6")
+    sys.exit(1)
+
 except Exception as e:
-    print(f"\n❌ Error: {e}")
+    print(f"[Main] ❌ Fatal error: {e}")
     import traceback
     traceback.print_exc()
-    print("\nTrying CLI mode instead...")
-    
-    try:
-        import subprocess
-        subprocess.run([sys.executable, "src/main_cli.py"])
-    except:
-        pass
-    
     sys.exit(1)
