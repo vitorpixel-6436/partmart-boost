@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """OptiScaler Manager - Main API
 
-Version: 0.3.5d (package 3.8a, stage 2/6)
+Version: 0.3.5d (package 3.8a, stage 3/6)
 """
 import threading
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Callable
 
 from .types import (
     InstallStatus,
@@ -18,6 +18,7 @@ from .types import (
 from .config import OptiScalerConfig
 from .detector import OptiScalerDetector
 from .injector import OptiScalerInjector
+from .installer import OptiScalerInstaller
 
 
 class OptiScalerManager:
@@ -30,7 +31,11 @@ class OptiScalerManager:
         manager.initialize()
         
         if not manager.is_installed():
-            manager.install()  # Stage 3
+            # Auto-install OptiScaler
+            def progress(status, percent):
+                print(f"{status}: {percent}%")
+            
+            manager.install(progress_callback=progress)
         
         config = OptiScalerConfig(
             backend=OptiScalerBackend.FSR3,
@@ -61,8 +66,9 @@ class OptiScalerManager:
         # Initialize components
         self._detector = OptiScalerDetector(self._install_dir)
         self._injector = OptiScalerInjector(self._install_dir)
+        self._installer = OptiScalerInstaller(self._install_dir)
         
-        print("[OptiScalerManager] Initialized (Stage 2/6)")
+        print("[OptiScalerManager] Initialized (Stage 3/6)")
         print(f"  Install dir: {self._install_dir}")
     
     def initialize(self) -> bool:
@@ -74,7 +80,7 @@ class OptiScalerManager:
             True if OptiScaler is installed and ready
         """
         with self._lock:
-            print("\n[OptiScalerManager] Stage 2: Real initialize")
+            print("\n[OptiScalerManager] Stage 3: Initialize with auto-install support")
             
             # Detect OptiScaler
             self._info = self._detector.detect()
@@ -91,7 +97,7 @@ class OptiScalerManager:
                 return self._info.status == InstallStatus.INSTALLED
             else:
                 print("[OptiScalerManager] OptiScaler not found")
-                print("  Run install() to download OptiScaler (Stage 3)")
+                print("  Run install() to auto-download OptiScaler")
                 return False
     
     def is_installed(self) -> bool:
@@ -117,18 +123,45 @@ class OptiScalerManager:
         """
         return self._info
     
-    def install(self, force: bool = False) -> bool:
+    def install(
+        self,
+        force: bool = False,
+        progress_callback: Optional[Callable[[str, int], None]] = None
+    ) -> bool:
         """Install or update OptiScaler
+        
+        Downloads OptiScaler from GitHub and installs it.
         
         Args:
             force: Force reinstall
+            progress_callback: Progress callback (status, percent)
         
         Returns:
             True if successful
         """
-        print("[OptiScalerManager] Stage 2: Install stub (real in Stage 3)")
-        # Stage 3: Auto-download and install from GitHub
-        raise NotImplementedError("Install will be implemented in Stage 3")
+        with self._lock:
+            print("\n[OptiScalerManager] Stage 3: Real install")
+            
+            # Check if already installed
+            if self.is_installed() and not force:
+                print("[OptiScalerManager] Already installed (use force=True to reinstall)")
+                return True
+            
+            try:
+                # Run installer
+                success = self._installer.install(progress_callback)
+                
+                if success:
+                    # Re-detect to update info
+                    self._info = self._detector.detect()
+                    print("[OptiScalerManager] Installation successful")
+                    return True
+                else:
+                    raise InstallationError("Installation failed")
+            
+            except Exception as e:
+                print(f"[OptiScalerManager] Installation error: {e}")
+                raise InstallationError(f"Failed to install OptiScaler: {e}")
     
     def configure(self, config: OptiScalerConfig) -> bool:
         """Configure OptiScaler settings
@@ -140,8 +173,6 @@ class OptiScalerManager:
             True if successful
         """
         with self._lock:
-            print("[OptiScalerManager] Stage 2: Real configure")
-            
             if not self.is_installed():
                 print("[OptiScalerManager] OptiScaler not installed")
                 return False
@@ -167,8 +198,6 @@ class OptiScalerManager:
         Returns:
             True if successful
         """
-        print(f"[OptiScalerManager] Stage 2: Real inject into {game.name}")
-        
         if not self.is_installed():
             raise InjectionError("OptiScaler not installed")
         
@@ -192,7 +221,6 @@ class OptiScalerManager:
         Returns:
             True if successful
         """
-        print(f"[OptiScalerManager] Removing from {game.name}")
         return self._injector.remove(game)
     
     def detect_game(self, game_dir: Path) -> Optional[GameInfo]:
@@ -204,7 +232,6 @@ class OptiScalerManager:
         Returns:
             GameInfo or None
         """
-        print("[OptiScalerManager] Stage 2: Real detect_game")
         return self._injector.detect_game(game_dir)
     
     def get_supported_games(self) -> List[str]:
@@ -213,7 +240,6 @@ class OptiScalerManager:
         Returns:
             List of game names
         """
-        # Known games that work with OptiScaler
         return [
             "Cyberpunk 2077",
             "Starfield",
@@ -230,7 +256,6 @@ class OptiScalerManager:
             "Forza Horizon 5",
             "Microsoft Flight Simulator",
             "Witcher 3 Next-Gen",
-            # ... hundreds more
         ]
     
     def uninstall(self) -> bool:
@@ -239,9 +264,22 @@ class OptiScalerManager:
         Returns:
             True if successful
         """
-        print("[OptiScalerManager] Stage 2: Uninstall stub (real in Stage 3)")
-        # Stage 3: Remove files
-        raise NotImplementedError("Uninstall will be implemented in Stage 3")
+        with self._lock:
+            print("\n[OptiScalerManager] Stage 3: Real uninstall")
+            
+            try:
+                success = self._installer.uninstall()
+                
+                if success:
+                    self._info = None
+                    self._config = None
+                    print("[OptiScalerManager] Uninstall successful")
+                
+                return success
+            
+            except Exception as e:
+                print(f"[OptiScalerManager] Uninstall error: {e}")
+                return False
     
     def get_install_dir(self) -> Path:
         """Get installation directory"""
@@ -258,3 +296,11 @@ class OptiScalerManager:
             True if valid
         """
         return self._detector.verify_installation()
+    
+    def get_latest_version(self) -> Optional[str]:
+        """Get latest available OptiScaler version
+        
+        Returns:
+            Version string or None
+        """
+        return self._installer.get_latest_version()

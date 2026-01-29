@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OptiScaler Integration Module
 
-Version: 0.3.5d (package 3.8a, stage 2/6)
+Version: 0.3.5d (package 3.8a, stage 3/6)
 
 Integrates OptiScaler middleware for real FSR 3.1, XeSS 2.1, and DLSS.
 
@@ -15,6 +15,7 @@ from .core import OptiScalerManager
 from .config import OptiScalerConfig
 from .detector import OptiScalerDetector
 from .injector import OptiScalerInjector
+from .installer import OptiScalerInstaller
 from .types import (
     OptiScalerBackend,
     OptiScalerQuality,
@@ -27,12 +28,13 @@ from .types import (
     ConfigurationError
 )
 
-__version__ = "0.3.5d+stage2"
+__version__ = "0.3.5d+stage3"
 __all__ = [
     'OptiScalerManager',
     'OptiScalerConfig',
     'OptiScalerDetector',
     'OptiScalerInjector',
+    'OptiScalerInstaller',
     'OptiScalerBackend',
     'OptiScalerQuality',
     'InstallStatus',
@@ -44,4 +46,4 @@ __all__ = [
     'ConfigurationError',
 ]
 
-print("[OptiScaler] Stage 2/6 - Detection & Injection loaded")
+print("[OptiScaler] Stage 3/6 - Auto-Download System loaded")
