@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Application Integrator
 
-Version: 0.3.5g (package 3.9a, stage 7.5/7.7)
+Version: 0.3.5h (package 3.9a, stage 7.6/7.7)
 
 Unified access point for all application components.
 
-Package 3.9a Stage 7.5: Advanced monitoring integration.
+Package 3.9a Stage 7.6: Configuration management integration.
 
 Features:
 - Unified component access
@@ -14,7 +14,8 @@ Features:
 - Graceful degradation
 - Service manager access
 - DataBus pub/sub system
-- Performance history and analytics (NEW)
+- Performance history and analytics
+- Configuration management (NEW)
 """
 import time
 from typing import Optional, Dict, Any
@@ -31,9 +32,9 @@ class AppIntegrator:
     - QtSignalBridge: Thread-safe Qt signals
     - BackendServiceManager: Backend services
     - PerformanceMonitor: Performance monitoring
-    - ConfigManager: Configuration management
+    - ConfigManager: Configuration management (NEW in Stage 7.6)
     - DataBus: Event-based pub/sub system
-    - MonitoringIntegration: Performance history and analytics (NEW in Stage 7.5)
+    - MonitoringIntegration: Performance history and analytics
     
     Usage:
         integrator = AppIntegrator()
@@ -42,11 +43,12 @@ class AppIntegrator:
         bridge = integrator.get_bridge()
         qt_signals = integrator.get_qt_signals()
         monitor = integrator.get_monitor()
+        config = integrator.get_config()  # NEW
         bus = integrator.get_data_bus()
-        monitoring = integrator.get_monitoring_integration()  # NEW
+        monitoring = integrator.get_monitoring_integration()
         
-        # Get analytics report
-        report = monitoring.get_latest_report()
+        # Get config value
+        theme = config.get('ui.theme', 'dark')
         
         # Check health
         health = integrator.get_health()
@@ -123,6 +125,15 @@ class AppIntegrator:
             self._monitor = service_manager.get_monitor()
             print("[AppIntegrator] ✅ ServiceManager connected")
     
+    def set_config(self, config):
+        """Set ConfigManager (Stage 7.6)
+        
+        Args:
+            config: ConfigManager instance
+        """
+        self._config = config
+        print("[AppIntegrator] ✅ ConfigManager connected")
+    
     def set_data_bus(self, data_bus):
         """Set DataBus
         
@@ -142,7 +153,7 @@ class AppIntegrator:
         print("[AppIntegrator] ✅ BusIntegration connected")
     
     def set_monitoring_integration(self, monitoring_integration):
-        """Set MonitoringIntegration (Stage 7.5)
+        """Set MonitoringIntegration
         
         Args:
             monitoring_integration: MonitoringIntegration instance
@@ -183,7 +194,7 @@ class AppIntegrator:
         return self._monitor
     
     def get_config(self):
-        """Get ConfigManager (Stage 7.3+)
+        """Get ConfigManager (Stage 7.6)
         
         Returns:
             ConfigManager instance or None
@@ -207,7 +218,7 @@ class AppIntegrator:
         return self._bus_integration
     
     def get_monitoring_integration(self):
-        """Get MonitoringIntegration (Stage 7.5)
+        """Get MonitoringIntegration
         
         Returns:
             MonitoringIntegration instance or None
@@ -234,7 +245,7 @@ class AppIntegrator:
             'qt_signals': 'ok' if self._qt_signals else 'unavailable',
             'service_manager': 'ok' if self._service_manager else 'unavailable',
             'monitor': 'ok' if self._monitor else 'unavailable',
-            'config': 'pending' if self._config is None else 'ok',
+            'config': 'ok' if self._config else 'unavailable',
             'data_bus': 'ok' if self._data_bus else 'pending',
             'bus_integration': 'ok' if self._bus_integration else 'pending',
             'monitoring_integration': 'ok' if self._monitoring_integration else 'pending',
@@ -251,7 +262,7 @@ class AppIntegrator:
         return time.perf_counter() - self._init_time
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get comprehensive stats (Stage 7.5)
+        """Get comprehensive stats
         
         Returns:
             Statistics dictionary
@@ -279,7 +290,7 @@ class AppIntegrator:
             except Exception:
                 pass
         
-        # Add monitoring integration stats if available (NEW in Stage 7.5)
+        # Add monitoring integration stats if available
         if self._monitoring_integration:
             try:
                 history = self._monitoring_integration.get_history()
@@ -296,6 +307,17 @@ class AppIntegrator:
                         'efficiency': report.efficiency,
                         'bottleneck': report.bottleneck.type.value,
                     }
+            except Exception:
+                pass
+        
+        # Add config stats if available (NEW in Stage 7.6)
+        if self._config:
+            try:
+                stats['config'] = {
+                    'keys': len(self._config.get_all_keys()),
+                    'theme': self._config.get('ui.theme'),
+                    'monitoring_enabled': self._config.get('monitor.enabled'),
+                }
             except Exception:
                 pass
         
@@ -334,7 +356,7 @@ class AppIntegrator:
             except Exception:
                 pass
         
-        # Print monitoring integration stats if available (NEW in Stage 7.5)
+        # Print monitoring integration stats if available
         if self._monitoring_integration:
             try:
                 history = self._monitoring_integration.get_history()
@@ -349,6 +371,16 @@ class AppIntegrator:
                     print(f"   Score: {report.score:.1f}/100")
                     print(f"   Efficiency: {report.efficiency:.1f}/100")
                     print(f"   Bottleneck: {report.bottleneck.type.value}")
+            except Exception:
+                pass
+        
+        # Print config stats if available (NEW in Stage 7.6)
+        if self._config:
+            try:
+                print(f"\n⚙️  Configuration:")
+                print(f"   Theme: {self._config.get('ui.theme')}")
+                print(f"   Monitoring: {'enabled' if self._config.get('monitor.enabled') else 'disabled'}")
+                print(f"   Keys loaded: {len(self._config.get_all_keys())}")
             except Exception:
                 pass
         
