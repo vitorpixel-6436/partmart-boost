@@ -1,13 +1,12 @@
 # PartMart Boost Requirements
-# Version: 0.3.5e (Package 3.9a, Stage 7.8a)
+# Version: 0.3.5d (Package 3.9a, Stage 7.8a)
 
 # Core Dependencies
 psutil>=5.9.0
 nvidia-ml-py3>=7.352.0
 
-# UI Framework (New Liquid Glass UI)
+# UI Framework (Liquid Glass UI - Stage 7.8a)
 PyQt6>=6.4.0
 
 # Optional Dependencies
 colorama>=0.4.6
-pynvml>=11.5.0
