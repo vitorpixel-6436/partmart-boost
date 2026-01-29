@@ -1,14 +1,14 @@
 @echo off
 REM PartMart Boost Launcher for Windows
-REM Version: 0.3.5d (Package 3.9a, Stage 7.8a)
+REM Version: 0.3.5d_hotfix5 (Package 3.9a, Stage 7.8a)
 REM Launches new launcher.py with Modern GUI support
 
-title PartMart Boost - Stage 7.8a
+title PartMart Boost - Stage 7.8a (hotfix5)
 
 echo ========================================================
 echo.
 echo     PARTMART BOOST LAUNCHER
-echo     Version: 0.3.5d (Package 3.9a, Stage 7.8a)
+echo     Version: 0.3.5d_hotfix5 (Package 3.9a, Stage 7.8a)
 echo     Liquid Glass UI Revolution
 echo.
 echo ========================================================
