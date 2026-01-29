@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
-"""UI Widgets Package
+"""Custom Widgets Package
 
-Version: 0.3.5e (package 3.9a, stage 7.3/7.7)
+Version: 0.3.5e (Package 3.9a, Stage 7.8a)
 
-Custom widgets integrated with BackendBridge.
+Modern UI widgets with Liquid Glass effects
 """
+from .game_card import GameCard
+from .glass_panel import GlassPanel
+from .modern_button import ModernButton
+from .status_indicator import StatusIndicator
 
-__all__ = [
-    'DashboardWidget',
-    'SettingsWidget',
-]
-
-try:
-    from .dashboard_widget import DashboardWidget
-    from .settings_widget import SettingsWidget
-except ImportError as e:
-    print(f"[ui.widgets] Import error: {e}")
+__all__ = ['GameCard', 'GlassPanel', 'ModernButton', 'StatusIndicator']
