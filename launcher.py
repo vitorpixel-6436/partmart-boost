@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """PartMart Boost Launcher
 
-Version: 0.3.5d_hotfix5 (Package 3.9a, Stage 7.8a)
+Version: 0.3.5d_hotfix6 (Package 3.9a, Stage 7.8a)
 
-Launcher with new Liquid Glass UI option
+Launcher with automatic PyQt6 fix and Liquid Glass UI
 """
 import sys
 import os
+import subprocess
 from pathlib import Path
 
 # Version info
-VERSION = '0.3.5d_hotfix5'
+VERSION = '0.3.5d_hotfix6'
 PACKAGE = '3.9a'
 STAGE = '7.8a'
 
@@ -24,34 +25,77 @@ def print_banner():
     print('=' * 70)
     print()
 
-def print_pyqt6_fix():
-    """Print PyQt6 installation fix instructions"""
+def fix_pyqt6():
+    """Automatically fix PyQt6 DLL errors"""
     print()
     print('=' * 70)
-    print('  PyQt6 DLL Error - Windows Fix Required')
+    print('  Auto-Fixing PyQt6 Installation')
     print('=' * 70)
     print()
-    print('[!] PyQt6 installation is corrupted or incomplete')
+    print('[*] Detected PyQt6 DLL error - fixing automatically...')
     print()
-    print('FIX - Run these commands:')
-    print()
-    print('  1. pip uninstall PyQt6 PyQt6-Qt6 PyQt6-sip -y')
-    print('  2. pip cache purge')
-    print('  3. pip install --upgrade pip setuptools')
-    print('  4. pip install PyQt6')
-    print()
-    print('Alternative fix (if above fails):')
-    print()
-    print('  pip install PyQt6==6.6.1  # Use specific stable version')
-    print()
-    print('After fixing, run launcher again and select Modern GUI.')
-    print()
-    print('=' * 70)
-    print()
-    input('Press Enter to continue with Legacy GUI option...')
-    print()
+    
+    try:
+        # Step 1: Uninstall all PyQt6 components
+        print('[1/4] Uninstalling corrupted PyQt6 components...')
+        subprocess.run(
+            [sys.executable, '-m', 'pip', 'uninstall', 'PyQt6', 'PyQt6-Qt6', 'PyQt6-sip', '-y'],
+            capture_output=True,
+            check=False
+        )
+        print('      ✓ PyQt6 components removed')
+        print()
+        
+        # Step 2: Clear pip cache
+        print('[2/4] Clearing pip cache...')
+        subprocess.run(
+            [sys.executable, '-m', 'pip', 'cache', 'purge'],
+            capture_output=True,
+            check=False
+        )
+        print('      ✓ Pip cache cleared')
+        print()
+        
+        # Step 3: Upgrade pip
+        print('[3/4] Upgrading pip...')
+        subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools'],
+            capture_output=True,
+            check=False
+        )
+        print('      ✓ Pip upgraded')
+        print()
+        
+        # Step 4: Reinstall PyQt6
+        print('[4/4] Reinstalling PyQt6 cleanly...')
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', 'PyQt6'],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            print('      ✓ PyQt6 installed successfully!')
+            print()
+            print('[+] PyQt6 fix completed!')
+            print('[*] Retrying Modern GUI launch...')
+            print()
+            return True
+        else:
+            print('      ✗ PyQt6 installation failed')
+            print()
+            print('[!] Could not fix PyQt6 automatically')
+            print('[!] Will use Legacy GUI instead')
+            print()
+            return False
+            
+    except Exception as e:
+        print(f'[!] Auto-fix failed: {e}')
+        print('[!] Will use Legacy GUI instead')
+        print()
+        return False
 
-def launch_modern_gui():
+def launch_modern_gui(retry_after_fix=True):
     """Launch modern Liquid Glass GUI"""
     print('[*] Launching Modern GUI (Liquid Glass UI)...')
     print()
@@ -75,22 +119,43 @@ def launch_modern_gui():
         
     except ImportError as e:
         error_msg = str(e)
-        print(f'[-] Failed to import PyQt6: {error_msg}')
-        print()
         
-        if 'DLL load failed' in error_msg or 'QtCore' in error_msg:
-            # Windows DLL error - provide detailed fix
-            print_pyqt6_fix()
-            
-            # Offer Legacy GUI as fallback
-            print('[*] Falling back to Legacy GUI...')
+        # Check if it's a DLL error
+        if ('DLL load failed' in error_msg or 'QtCore' in error_msg) and retry_after_fix:
+            print(f'[-] PyQt6 DLL Error detected')
             print()
-            return launch_legacy_gui()
+            
+            # Automatically fix PyQt6
+            if fix_pyqt6():
+                # Retry Modern GUI after fix
+                return launch_modern_gui(retry_after_fix=False)
+            else:
+                # Fix failed, fallback to Legacy GUI
+                print('[*] Falling back to Legacy GUI...')
+                print()
+                return launch_legacy_gui()
         else:
             # Other import error
-            print('[!] Install PyQt6 with: pip install PyQt6')
+            print(f'[-] Failed to import PyQt6: {error_msg}')
+            print('[!] Installing PyQt6...')
             print()
-            return False
+            
+            # Try to install PyQt6
+            result = subprocess.run(
+                [sys.executable, '-m', 'pip', 'install', 'PyQt6'],
+                capture_output=True
+            )
+            
+            if result.returncode == 0 and retry_after_fix:
+                print('[+] PyQt6 installed, retrying...')
+                print()
+                return launch_modern_gui(retry_after_fix=False)
+            else:
+                print('[!] PyQt6 installation failed')
+                print('[*] Falling back to Legacy GUI...')
+                print()
+                return launch_legacy_gui()
+                
     except Exception as e:
         print(f'[-] GUI launch failed: {e}')
         import traceback
@@ -101,7 +166,7 @@ def launch_legacy_gui():
     """Launch legacy GUI (old design)"""
     print('[*] Launching Legacy GUI...')
     print('[!] Note: Legacy GUI has basic design')
-    print('[!] Fix PyQt6 to use beautiful Liquid Glass UI!')
+    print('[!] All features available, just different look')
     print()
     
     try:
@@ -119,9 +184,8 @@ def launch_legacy_gui():
         
     except Exception as e:
         print(f'[-] Legacy GUI also failed: {e}')
-        print()
-        print('[!] PyQt6 is required for GUI mode')
-        print('[!] Fix PyQt6 following instructions above, or use CLI mode')
+        print('[!] PyQt6 is required for any GUI mode')
+        print('[!] Use CLI mode instead')
         print()
         return False
 
