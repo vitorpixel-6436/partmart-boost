@@ -1,5 +1,5 @@
 # PartMart Boost - Optimized Dependencies
-# Version: 0.3.5d (package 3.9a, stage 5/5)
+# Version: 0.3.5e (package 3.9a, stage 7.1/7.6)
 # Updated: 2026-01-29
 # Total: 8 core packages + ~27 sub-dependencies = 35 packages
 #
@@ -133,18 +133,38 @@ numba>=0.56.0; python_version < '3.12'
 #
 # Without GPU support:
 #   pip install numpy PyQt6 psutil pyyaml colorama
+#
+# Verify installation (Stage 7+):
+#   python -m src.core.system_init --check
+
+# ==============================================================================
+# DEVELOPMENT DEPENDENCIES (Install separately)
+# ==============================================================================
+
+# Testing:
+#   pip install pytest>=7.0.0 pytest-cov>=4.0.0 pytest-qt>=4.2.0
+#
+# Code quality:
+#   pip install black>=23.0.0 flake8>=6.0.0 mypy>=1.0.0
+#
+# Documentation:
+#   pip install sphinx>=5.0.0 sphinx-rtd-theme>=1.2.0
+#
+# Profiling:
+#   pip install memory-profiler>=0.60.0 line-profiler>=4.0.0
 
 # ==============================================================================
 # COMPATIBILITY
 # ==============================================================================
 
-# Python: 3.8 - 3.15
-# PyQt6: 6.4+ (6.6+ recommended)
-# OS: Windows, Linux, macOS
-# Arch: x86_64, arm64 (M1/M2 Macs)
+# Python: 3.8 - 3.15+
+# PyQt6: 6.4+ (6.6+ recommended for Python 3.14+)
+# OS: Windows 10/11, Linux (Ubuntu 20.04+), macOS (11+)
+# Arch: x86_64, arm64 (M1/M2/M3 Macs)
+# GPU: NVIDIA (CUDA), AMD (ROCm), Intel (partial)
 
 # ==============================================================================
-# PACKAGE STATISTICS
+# PACKAGE STATISTICS (Stage 7.1)
 # ==============================================================================
 
 # Core packages: 8 (was 15 in Stage 4)
@@ -154,30 +174,31 @@ numba>=0.56.0; python_version < '3.12'
 #
 # Installation size:
 #   Stage 4: ~256 MB
-#   Stage 5: ~137 MB
+#   Stage 5-7: ~137 MB
 #   Saved: ~119 MB (46% reduction)
 #
 # Startup time:
 #   Stage 4: ~2600 ms
-#   Stage 5: ~350 ms
+#   Stage 5-7: ~350 ms (or less with init optimizations)
 #   Saved: ~2250 ms (87% faster)
 #
 # Memory usage:
 #   Stage 4: ~250 MB
-#   Stage 5: ~180 MB
+#   Stage 5-7: ~180 MB
 #   Saved: ~70 MB (28% reduction)
 
 # ==============================================================================
-# DEVELOPMENT DEPENDENCIES (Not included in requirements.txt)
+# TROUBLESHOOTING
 # ==============================================================================
 
-# Install separately for development:
+# Issue: PyQt6 not found
+# Solution: pip install --upgrade PyQt6
 #
-# Testing:
-#   pip install pytest pytest-cov pytest-qt
+# Issue: GPUtil not detecting GPU
+# Solution: Update GPU drivers, or run without GPU support
 #
-# Code quality:
-#   pip install black flake8 mypy
+# Issue: Import errors
+# Solution: python -m src.core.system_init --check
 #
-# Documentation:
-#   pip install sphinx sphinx-rtd-theme
+# Issue: Slow startup
+# Solution: Check that Stage 5+ optimizations are active
