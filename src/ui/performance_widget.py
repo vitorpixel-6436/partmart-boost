@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Custom Performance Widget with Steam-inspired design
 
-Version: 0.3.5d_package3.2b
+Version: 0.3.5e (package 3.9a, stage 7.3/7.7)
+
+Package 3.9a Stage 7.3: Integrated with BackendBridge.
 
 Features:
 - 100% custom-painted UI (no standard widgets)
@@ -13,6 +15,7 @@ Features:
 - Gradient color zones
 - Smooth animations
 - Hardware-accelerated rendering
+- Real-time updates via Qt signals
 """
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt, QTimer, QRectF, pyqtSignal, QPointF
@@ -21,7 +24,7 @@ from PyQt6.QtGui import (
     QLinearGradient, QConicalGradient, QPainterPath,
     QFontMetrics, QRadialGradient
 )
-from typing import List, Optional, Deque
+from typing import List, Optional, Deque, Dict, Any
 from collections import deque
 import math
 import time
@@ -30,7 +33,7 @@ import time
 class PerformanceWidget(QWidget):
     """Custom performance display widget with Steam-inspired design
     
-    v0.3.5d_package3.2b - 100% custom UI
+    v0.3.5e (package 3.9a, stage 7.3/7.7) - Integrated with BackendBridge
     
     This widget provides:
     - Circular gauges for CPU/GPU/RAM
@@ -39,6 +42,7 @@ class PerformanceWidget(QWidget):
     - Bottleneck warnings
     - Trend sparklines
     - Smooth animations
+    - Real-time updates via Qt signals
     
     Colors:
     - Excellent (>80): #4CAF50 (Green)
@@ -46,25 +50,30 @@ class PerformanceWidget(QWidget):
     - Fair (40-60): #FF9800 (Orange)
     - Poor (<40): #F44336 (Red)
     
-    Example:
-        >>> widget = PerformanceWidget()
-        >>> widget.update_performance(
-        >>>     score=87.5,
-        >>>     cpu=82.3,
-        >>>     gpu=65.1,
-        >>>     ram=89.2,
-        >>>     cpu_eff=1.2,
-        >>>     gpu_eff=0.9,
-        >>>     bottleneck='cpu',
-        >>>     bottleneck_severity='medium'
-        >>> )
+    Integration:
+        >>> from core.app_integrator import AppIntegrator
+        >>> 
+        >>> integrator = AppIntegrator.get_instance()
+        >>> qt_signals = integrator.get_qt_signals()
+        >>> 
+        >>> widget = PerformanceWidget(qt_signals)
+        >>> # Widget automatically receives updates via signals
     """
     
     # Signals
     clicked = pyqtSignal()
     
-    def __init__(self, parent=None):
+    def __init__(self, qt_signals=None, parent=None):
+        """Initialize performance widget
+        
+        Args:
+            qt_signals: QtSignalBridge instance (optional)
+            parent: Parent widget
+        """
         super().__init__(parent)
+        
+        # Bridge connection
+        self._qt_signals = qt_signals
         
         # Data
         self._score = 0.0
@@ -119,6 +128,33 @@ class PerformanceWidget(QWidget):
         
         # Enable mouse tracking
         self.setMouseTracking(True)
+        
+        # Connect to signals
+        if self._qt_signals:
+            self._qt_signals.data_updated.connect(self._on_data_updated)
+            print("[PerformanceWidget] Connected to Qt signals")
+    
+    def _on_data_updated(self, data_type: str, data: Dict[str, Any]):
+        """Handle data update from backend (Stage 7.3)
+        
+        Args:
+            data_type: Type of data ('performance_metrics', etc.)
+            data: Data dictionary
+        """
+        if data_type == 'performance_metrics':
+            # Extract metrics
+            score = data.get('score', 0.0)
+            cpu = data.get('cpu', 0.0)
+            gpu = data.get('gpu', 0.0)
+            ram = data.get('memory', 0.0)  # 'memory' in backend
+            
+            # Update performance
+            self.update_performance(
+                score=score,
+                cpu=cpu,
+                gpu=gpu,
+                ram=ram
+            )
     
     def update_performance(self, score: float, cpu: float, gpu: float, ram: float,
                           cpu_eff: float = 0.0, gpu_eff: float = 0.0,
@@ -300,17 +336,7 @@ class PerformanceWidget(QWidget):
     def _draw_circular_gauge(self, painter: QPainter, x: int, y: int, size: int,
                             value: float, label: str, history: List[float],
                             highlight: bool = False):
-        """Draw a single circular gauge
-        
-        Args:
-            painter: QPainter instance
-            x, y: Top-left position
-            size: Gauge diameter
-            value: Current value (0-100)
-            label: Label text
-            history: Historical values for sparkline
-            highlight: Highlight as bottleneck
-        """
+        """Draw a single circular gauge"""
         center_x = x + size // 2
         center_y = y + size // 2
         radius = size // 2 - 5
@@ -388,14 +414,7 @@ class PerformanceWidget(QWidget):
     
     def _draw_mini_sparkline(self, painter: QPainter, x: int, y: int,
                             width: int, height: int, data: List[float]):
-        """Draw mini sparkline graph
-        
-        Args:
-            painter: QPainter instance
-            x, y: Top-left position
-            width, height: Dimensions
-            data: Data points
-        """
+        """Draw mini sparkline graph"""
         if len(data) < 2:
             return
         
@@ -469,95 +488,3 @@ class PerformanceWidget(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
-
-
-# ========== TESTING ==========
-
-if __name__ == "__main__":
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
-    import sys
-    import random
-    
-    print("="*60)
-    print("PerformanceWidget v0.3.5d_package3.2b Test")
-    print("="*60)
-    
-    app = QApplication(sys.argv)
-    
-    # Main window
-    window = QMainWindow()
-    window.setWindowTitle("Performance Widget Test")
-    window.setStyleSheet("background-color: #1a1d24;")
-    
-    # Central widget
-    central = QWidget()
-    layout = QVBoxLayout(central)
-    
-    # Performance widget
-    perf_widget = PerformanceWidget()
-    layout.addWidget(perf_widget)
-    
-    window.setCentralWidget(central)
-    window.resize(450, 400)
-    window.show()
-    
-    # Simulate performance updates
-    base_cpu = 70.0
-    base_gpu = 65.0
-    base_ram = 80.0
-    bottleneck_component = 'none'
-    bottleneck_counter = 0
-    
-    def update_performance():
-        global base_cpu, base_gpu, base_ram, bottleneck_component, bottleneck_counter
-        
-        # Vary loads
-        cpu = base_cpu + random.uniform(-5, 5)
-        gpu = base_gpu + random.uniform(-5, 5)
-        ram = base_ram + random.uniform(-3, 3)
-        
-        # Calculate score
-        score = (100 - max(cpu, gpu, ram)) * 0.6 + random.uniform(40, 60)
-        
-        # CPU/GPU efficiency
-        cpu_eff = 60.0 / cpu if cpu > 0 else 0
-        gpu_eff = 60.0 / gpu if gpu > 0 else 0
-        
-        # Bottleneck simulation
-        bottleneck_counter += 1
-        if bottleneck_counter > 50:
-            components = ['cpu', 'gpu', 'ram', 'none']
-            severities = ['low', 'medium', 'high', 'none']
-            bottleneck_component = random.choice(components)
-            bottleneck_severity = random.choice(severities) if bottleneck_component != 'none' else 'none'
-            bottleneck_counter = 0
-        else:
-            bottleneck_severity = 'medium' if bottleneck_component != 'none' else 'none'
-        
-        # Update widget
-        perf_widget.update_performance(
-            score=score,
-            cpu=cpu,
-            gpu=gpu,
-            ram=ram,
-            cpu_eff=cpu_eff,
-            gpu_eff=gpu_eff,
-            bottleneck=bottleneck_component,
-            bottleneck_severity=bottleneck_severity
-        )
-    
-    # Update timer
-    timer = QTimer()
-    timer.timeout.connect(update_performance)
-    timer.start(100)  # Update every 100ms
-    
-    print("\n✅ PerformanceWidget displaying!")
-    print("  - Circular gauges (CPU/GPU/RAM)")
-    print("  - Performance score")
-    print("  - Efficiency indicators")
-    print("  - Mini sparklines")
-    print("  - Bottleneck warnings")
-    print("  - Smooth animations")
-    print("\nClose window to exit.")
-    
-    sys.exit(app.exec())
