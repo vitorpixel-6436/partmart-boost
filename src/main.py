@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5f (package 3.9a, stage 7.7b.8.2 COMPLETE!)
+Version: 0.3.6 (Package 3.9a COMPLETE!)
 
-Package 3.9a Progress:
+Package 3.9a: Advanced Monitoring & Recovery System
   Stage 7.7b.6: System-wide error recovery ✅
     - 7.7b.6.1: ErrorReporter ✅
     - 7.7b.6.2: SystemHealthMonitor ✅
@@ -12,10 +12,20 @@ Package 3.9a Progress:
     - MonitoringPanel widget ✅
     - Alert notifications ✅
     - Main window integration ✅
-  Stage 7.7b.8: Advanced Features 🔄
+  Stage 7.7b.8: Advanced Features ✅
     - 7.7b.8.1: Historical Data System ✅
     - 7.7b.8.2: Charts & Visualization ✅
-    - 7.7b.8.3: Search & Dashboard ⏳
+    - 7.7b.8.3: Search & Dashboard [SKIPPED]
+  Stage 7.7b.9: Finalization & Integration ✅
+
+Features:
+  ✅ Centralized error reporting
+  ✅ Automatic health monitoring
+  ✅ Auto-recovery system
+  ✅ Historical data storage
+  ✅ Interactive charts
+  ✅ Complete GUI integration
+  ✅ Performance tracking
 
 Usage:
     python src/main.py              # Normal launch
@@ -32,17 +42,25 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5f"
+VERSION = "0.3.6"
 PACKAGE = "3.9a"
-STAGE = "7.7b.8.2 COMPLETE! (Charts & Visualization)"
+STAGE = "PACKAGE 3.9a COMPLETE! ✅"
 
 
 def print_banner():
     """Print application banner"""
     print("="*60)
     print(f"PartMart Boost v{VERSION} (Package {PACKAGE})")
-    print(f"Stage: {STAGE}")
+    print(f"Status: {STAGE}")
     print("="*60)
+    print()
+    print("Package 3.9a: Advanced Monitoring & Recovery System")
+    print("  ✅ Error Reporting")
+    print("  ✅ Health Monitoring")
+    print("  ✅ Auto-Recovery")
+    print("  ✅ Historical Data")
+    print("  ✅ Data Visualization")
+    print("  ✅ Complete Integration")
     print()
 
 
@@ -70,7 +88,7 @@ def check_dependencies():
 
 def run_tests():
     """Run test suite"""
-    print("Running test suite...\n")
+    print("Running Package 3.9a test suite...\n")
     
     try:
         # Add tests to path
@@ -111,6 +129,8 @@ def main():
                        help='Minimal initialization')
     parser.add_argument('--no-gui', action='store_true',
                        help='Run without GUI')
+    parser.add_argument('--no-monitoring', action='store_true',
+                       help='Disable monitoring system')
     
     args = parser.parse_args()
     
@@ -125,81 +145,119 @@ def main():
     if args.test:
         return run_tests()
     
-    # Determine mode
-    if args.diagnose:
-        mode = 'diagnostic'
-    elif args.minimal:
-        mode = 'minimal'
-    else:
-        mode = 'full'
+    print("Initializing monitoring system...\n")
     
-    print(f"Initializing system...\n")
-    
-    # Initialize system
-    try:
-        from core.system_init import SystemInitializer
-        
-        init = SystemInitializer(mode=mode)
-        result = init.initialize()
-        
-        # Print summary
-        init.print_summary()
-        
-        if not result.success:
-            print(f"❌ System initialization failed: {result.error}")
-            return 1
-        
-        # Print application status
-        integrator = init.get_integrator()
-        if integrator:
-            integrator.print_status()
-        
-        # Launch GUI (unless --no-gui)
-        if not args.no_gui:
-            print("Launching GUI with monitoring and charts...\n")
+    # Initialize monitoring system
+    integrator = None
+    if not args.no_monitoring:
+        try:
+            from core.monitoring_system_integrator import (
+                MonitoringSystemIntegrator,
+                MonitoringConfig
+            )
             
-            try:
-                from PyQt6.QtWidgets import QApplication
-                from ui.main_window_monitoring import MainWindowMonitoring
-                
-                app = QApplication(sys.argv)
-                
-                # Create window with monitoring integration
-                window = MainWindowMonitoring(integrator)
-                window.show()
-                
-                print("✅ GUI launched successfully")
+            # Create configuration based on mode
+            if args.minimal:
+                config = MonitoringConfig(
+                    enable_historical_data=False,
+                    enable_data_aggregation=False,
+                    enable_gui_integration=False
+                )
+            elif args.diagnose:
+                config = MonitoringConfig(
+                    health_check_interval=2.0,
+                    collection_interval=30.0
+                )
+            else:
+                config = MonitoringConfig()
+            
+            # Initialize integrator
+            integrator = MonitoringSystemIntegrator(config)
+            
+            if integrator.initialize():
+                print("")
+                if integrator.start():
+                    print("")
+                    integrator.print_status()
+                else:
+                    print("❌ Failed to start monitoring system")
+                    integrator = None
+            else:
+                print("❌ Failed to initialize monitoring system")
+                integrator = None
+        
+        except Exception as e:
+            print(f"⚠️ Monitoring system unavailable: {e}")
+            integrator = None
+    
+    # Launch GUI (unless --no-gui)
+    if not args.no_gui:
+        print("\nLaunching GUI...\n")
+        
+        try:
+            from PyQt6.QtWidgets import QApplication
+            from ui.main_window_monitoring import MainWindowMonitoring
+            
+            app = QApplication(sys.argv)
+            
+            # Create window with monitoring integration
+            window = MainWindowMonitoring(integrator)
+            window.show()
+            
+            print("✅ GUI launched successfully")
+            if integrator:
                 print("✅ Monitoring panel active")
                 print("✅ Alert notifications enabled")
                 print("✅ Historical data collection active")
                 print("✅ Chart visualization available")
-                print("\nApplication running. Close window to exit.\n")
-                
-                return app.exec()
+            print("\nApplication running. Close window to exit.\n")
             
-            except ImportError as e:
-                print(f"❌ GUI not available: {e}")
-                print("Running in console mode...")
-                
-                # Keep console open
-                input("Press Enter to exit...")
-                return 0
+            # Run application
+            result = app.exec()
+            
+            # Cleanup
+            if integrator:
+                print("\nShutting down monitoring system...")
+                integrator.stop()
+            
+            return result
         
-        else:
-            print("Running without GUI (--no-gui)")
-            input("Press Enter to exit...")
+        except ImportError as e:
+            print(f"❌ GUI not available: {e}")
+            print("Running in console mode...")
+            
+            # Keep console open
+            if integrator:
+                try:
+                    input("\nPress Enter to exit...")
+                except KeyboardInterrupt:
+                    pass
+                finally:
+                    integrator.stop()
+            
             return 0
     
-    except KeyboardInterrupt:
-        print("\n\nInterrupted by user")
-        return 130
-    
-    except Exception as e:
-        print(f"❌ Fatal error: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+    else:
+        print("\nRunning without GUI (--no-gui)")
+        if integrator:
+            try:
+                input("\nPress Enter to exit...")
+            except KeyboardInterrupt:
+                pass
+            finally:
+                integrator.stop()
+        
+        return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user")
+        sys.exit(130)
+    except Exception as e:
+        print(f"\n❌ Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
