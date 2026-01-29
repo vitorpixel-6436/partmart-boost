@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5o (package 3.9a, stage 7.7b.5.2/7.7)
+Version: 0.3.5p (package 3.9a, stage 7.7b.5.3/7.7)
 
-Package 3.9a Stage 7.7b.5.2: Error handling in GameDetectionService.
+Package 3.9a Stage 7.7b.5: Service layer error handling complete!
+  - 7.7b.5.1: PerformanceMonitor error handling
+  - 7.7b.5.2: GameDetectionService error handling
+  - 7.7b.5.3: BackendServiceManager error handling
 
 Usage:
     python src/main.py              # Normal launch
@@ -20,15 +23,16 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5o"
+VERSION = "0.3.5p"
 PACKAGE = "3.9a"
-STAGE = "7.7b.5.2/7.7"
+STAGE = "7.7b.5.3/7.7 (Service Layer Complete!)"
 
 
 def print_banner():
     """Print application banner"""
     print("="*60)
-    print(f"PartMart Boost v{VERSION} (Package {PACKAGE}, Stage {STAGE})")
+    print(f"PartMart Boost v{VERSION} (Package {PACKAGE})")
+    print(f"Stage: {STAGE}")
     print("="*60)
     print()
 
