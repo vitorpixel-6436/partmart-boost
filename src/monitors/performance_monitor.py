@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """Performance Monitor
 
-Version: 0.3.5d (package 3.9a, stage 3/3)
+Version: 0.3.5e (package 3.9a, stage 7.2-7.4/7.6)
 
 System performance monitoring with real hardware data.
 
-Package 3.9a Stage 3 Fixes:
-- Replaced mock data with real hardware monitoring
-- Integrated psutil for CPU/Memory
-- Integrated GPUtil for GPU metrics
-- Added data bus integration
+Package 3.9a Stage 7.2: BackendBridge integration.
+
+Changes:
+- Integrated with BackendBridge
+- Registers command handlers
+- Publishes via bridge
+- Query handler for historical data
 """
 import time
 import threading
 import weakref
 from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from contextlib import contextmanager
+from collections import deque
 
 # Try to import monitoring libraries
 try:
@@ -45,15 +48,23 @@ class PerformanceMetrics:
     memory_total: float
     temperature: float
     power_draw: float
+    timestamp: float = 0.0
+    
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 class PerformanceMonitor:
-    """Performance Monitor v0.3.5d (package 3.9a)
+    """Performance Monitor v0.3.5e (package 3.9a)
     
-    Package 3.9a Stage 3 Fixes:
-    - Real hardware data collection
-    - Data bus integration
-    - Fallback to mock if hardware unavailable
+    Package 3.9a Stage 7.2: BackendBridge integration
+    
+    Features:
+    - Real hardware monitoring
+    - BackendBridge integration
+    - Command handlers
+    - Query handlers
+    - Historical data storage
     """
     
     MIN_TEMP = -50.0
@@ -63,8 +74,9 @@ class PerformanceMonitor:
     MIN_POWER = 0.0
     MAX_POWER = 1000.0
     HEALTH_CHECK_INTERVAL = 60.0
+    HISTORY_SIZE = 1000  # Keep last 1000 metrics
     
-    def __init__(self):
+    def __init__(self, register_handlers: bool = True):
         self._lock = threading.RLock()
         self._running = False
         self._start_time: Optional[float] = None
@@ -74,18 +86,222 @@ class PerformanceMonitor:
         self._metric_count = 0
         self._allocated_resources: List[Any] = []
         
-        # STAGE 3: Track current FPS for real metrics
+        # Track current FPS for real metrics
         self._current_fps = 0.0
         
-        # STAGE 3: Data bus integration
-        try:
-            from core.data_bus import PerformanceDataBus
-            self._data_bus = PerformanceDataBus.get_instance()
-        except ImportError:
-            self._data_bus = None
-            print("[PerformanceMonitor] Data bus not available")
+        # Historical data storage (Stage 7.2)
+        self._metrics_history: deque = deque(maxlen=self.HISTORY_SIZE)
         
-        print(f"[PerformanceMonitor v0.3.5d] Initialized (psutil={PSUTIL_AVAILABLE}, GPUtil={GPUTIL_AVAILABLE})")
+        # BackendBridge integration (Stage 7.2)
+        self._bridge = None
+        
+        if register_handlers:
+            self._init_bridge_integration()
+        
+        print(f"[PerformanceMonitor v0.3.5e] Initialized (psutil={PSUTIL_AVAILABLE}, GPUtil={GPUTIL_AVAILABLE})")
+    
+    def _init_bridge_integration(self):
+        """Initialize BackendBridge integration (Stage 7.2)"""
+        try:
+            # Import here to avoid circular dependency
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent.parent))
+            
+            from core.backend_bridge import BackendBridge, Command, CommandResult
+            from core.backend_bridge import QueryResult
+            
+            # Get bridge instance
+            self._bridge = BackendBridge.get_instance()
+            
+            # Register command handlers
+            self._bridge.register_command_handler('start_monitoring', self._handle_start_monitoring)
+            self._bridge.register_command_handler('stop_monitoring', self._handle_stop_monitoring)
+            self._bridge.register_command_handler('get_metrics', self._handle_get_metrics)
+            self._bridge.register_command_handler('clear_history', self._handle_clear_history)
+            
+            # Register query handlers
+            self._bridge.register_query_handler('performance_metrics', self._handle_metrics_query)
+            self._bridge.register_query_handler('performance_stats', self._handle_stats_query)
+            
+            print("[PerformanceMonitor] ✓ BackendBridge integrated")
+        
+        except ImportError as e:
+            print(f"[PerformanceMonitor] BackendBridge not available: {e}")
+    
+    # ========================================================================
+    # COMMAND HANDLERS (Stage 7.2)
+    # ========================================================================
+    
+    def _handle_start_monitoring(self, command) -> 'CommandResult':
+        """Handle start monitoring command"""
+        from core.backend_bridge import CommandResult
+        
+        try:
+            interval = command.params.get('interval', 100)
+            metrics = command.params.get('metrics', [])
+            
+            success = self.start()
+            
+            if success:
+                # Publish event
+                if self._bridge:
+                    self._bridge.publish_event('monitoring_started', {
+                        'interval': interval,
+                        'metrics': metrics,
+                    })
+                
+                return CommandResult(
+                    request_id=command.request_id,
+                    success=True,
+                    data={'status': 'started', 'interval': interval}
+                )
+            else:
+                return CommandResult(
+                    request_id=command.request_id,
+                    success=False,
+                    error='Already running'
+                )
+        
+        except Exception as e:
+            return CommandResult(
+                request_id=command.request_id,
+                success=False,
+                error=str(e)
+            )
+    
+    def _handle_stop_monitoring(self, command) -> 'CommandResult':
+        """Handle stop monitoring command"""
+        from core.backend_bridge import CommandResult
+        
+        try:
+            self.stop()
+            
+            # Publish event
+            if self._bridge:
+                self._bridge.publish_event('monitoring_stopped', {})
+            
+            return CommandResult(
+                request_id=command.request_id,
+                success=True,
+                data={'status': 'stopped'}
+            )
+        
+        except Exception as e:
+            return CommandResult(
+                request_id=command.request_id,
+                success=False,
+                error=str(e)
+            )
+    
+    def _handle_get_metrics(self, command) -> 'CommandResult':
+        """Handle get metrics command"""
+        from core.backend_bridge import CommandResult
+        
+        try:
+            metrics = self.get_metrics()
+            
+            if metrics:
+                return CommandResult(
+                    request_id=command.request_id,
+                    success=True,
+                    data=metrics.to_dict()
+                )
+            else:
+                return CommandResult(
+                    request_id=command.request_id,
+                    success=False,
+                    error='Not running'
+                )
+        
+        except Exception as e:
+            return CommandResult(
+                request_id=command.request_id,
+                success=False,
+                error=str(e)
+            )
+    
+    def _handle_clear_history(self, command) -> 'CommandResult':
+        """Handle clear history command"""
+        from core.backend_bridge import CommandResult
+        
+        try:
+            with self._lock:
+                self._metrics_history.clear()
+            
+            return CommandResult(
+                request_id=command.request_id,
+                success=True,
+                data={'cleared': True}
+            )
+        
+        except Exception as e:
+            return CommandResult(
+                request_id=command.request_id,
+                success=False,
+                error=str(e)
+            )
+    
+    # ========================================================================
+    # QUERY HANDLERS (Stage 7.2)
+    # ========================================================================
+    
+    def _handle_metrics_query(self, params: dict) -> 'QueryResult':
+        """Handle metrics query"""
+        from core.backend_bridge import QueryResult
+        
+        try:
+            # Get query parameters
+            limit = params.get('limit', 100)
+            filters = params.get('filter', {})
+            
+            # Get history
+            with self._lock:
+                history = list(self._metrics_history)
+            
+            # Apply filters (simplified)
+            # TODO: Implement full filter support
+            
+            # Limit results
+            results = history[-limit:]
+            
+            # Convert to dicts
+            data = [m.to_dict() for m in results]
+            
+            return QueryResult(
+                success=True,
+                data=data,
+                row_count=len(data)
+            )
+        
+        except Exception as e:
+            return QueryResult(
+                success=False,
+                error=str(e)
+            )
+    
+    def _handle_stats_query(self, params: dict) -> 'QueryResult':
+        """Handle stats query"""
+        from core.backend_bridge import QueryResult
+        
+        try:
+            stats = self.get_health_stats()
+            
+            return QueryResult(
+                success=True,
+                data=stats,
+                row_count=1
+            )
+        
+        except Exception as e:
+            return QueryResult(
+                success=False,
+                error=str(e)
+            )
+    
+    # ========================================================================
+    # CORE FUNCTIONALITY
+    # ========================================================================
     
     def start(self) -> bool:
         with self._lock:
@@ -132,17 +348,11 @@ class PerformanceMonitor:
         self._callbacks.clear()
     
     def set_fps(self, fps: float):
-        """Update current FPS (called by FPSTracker)
-        
-        Package 3.9a Stage 3: Added for real FPS tracking
-        """
+        """Update current FPS (called by FPSTracker)"""
         self._current_fps = fps
     
     def get_metrics(self) -> Optional[PerformanceMetrics]:
-        """Get current performance metrics
-        
-        Package 3.9a Stage 3: Returns real hardware data
-        """
+        """Get current performance metrics"""
         with self._lock:
             if not self._running:
                 return None
@@ -152,9 +362,15 @@ class PerformanceMonitor:
                 metrics = self._collect_metrics()
                 self._metric_count += 1
                 
-                # STAGE 3: Publish to data bus
-                if self._data_bus:
-                    self._data_bus.publish('performance_metrics', metrics)
+                # Add timestamp
+                metrics.timestamp = time.time()
+                
+                # Store in history (Stage 7.2)
+                self._metrics_history.append(metrics)
+                
+                # Publish to bridge (Stage 7.2)
+                if self._bridge:
+                    self._bridge.publish_data('performance_metrics', metrics.to_dict())
                 
                 return metrics
             except Exception as e:
@@ -163,52 +379,39 @@ class PerformanceMonitor:
                 return self._get_fallback_metrics()
     
     def _collect_metrics(self) -> PerformanceMetrics:
-        """Collect real hardware metrics
-        
-        Package 3.9a Stage 3 Fix:
-        - Real GPU data (GPUtil)
-        - Real CPU data (psutil)
-        - Real memory data (psutil)
-        - Fallback to mock if unavailable
-        """
+        """Collect real hardware metrics""" 
         try:
-            # STAGE 3 FIX: Collect REAL GPU metrics
+            # Collect REAL GPU metrics
             if GPUTIL_AVAILABLE:
                 gpus = GPUtil.getGPUs()
                 if gpus:
-                    gpu = gpus[0]  # First GPU
+                    gpu = gpus[0]
                     gpu_util = gpu.load * 100
                     gpu_temp = gpu.temperature
                     gpu_memory_used = gpu.memoryUsed
                     gpu_memory_total = gpu.memoryTotal
                 else:
-                    # No GPU detected
                     gpu_util = 0.0
                     gpu_temp = 0.0
                     gpu_memory_used = 0.0
                     gpu_memory_total = 0.0
             else:
-                # Fallback to mock
                 gpu_util = 75.0
                 gpu_temp = 65.0
                 gpu_memory_used = 4096.0
                 gpu_memory_total = 8192.0
             
-            # STAGE 3 FIX: Collect REAL CPU metrics
+            # Collect REAL CPU metrics
             if PSUTIL_AVAILABLE:
                 cpu_util = psutil.cpu_percent(interval=0.1)
-                
-                # Memory
                 memory = psutil.virtual_memory()
-                memory_used = memory.used / (1024 * 1024)  # MB
-                memory_total = memory.total / (1024 * 1024)  # MB
+                memory_used = memory.used / (1024 * 1024)
+                memory_total = memory.total / (1024 * 1024)
                 
-                # Try to get CPU temperature
                 try:
                     if hasattr(psutil, 'sensors_temperatures'):
                         temps = psutil.sensors_temperatures()
                         if temps:
-                            # Get first available temperature
                             cpu_temp = list(temps.values())[0][0].current
                         else:
                             cpu_temp = 0.0
@@ -217,23 +420,16 @@ class PerformanceMonitor:
                 except:
                     cpu_temp = 0.0
             else:
-                # Fallback to mock
                 cpu_util = 60.0
                 memory_used = 4096.0
                 memory_total = 16384.0
                 cpu_temp = 0.0
             
-            # Temperature: prefer GPU, fallback to CPU
             temperature = gpu_temp if gpu_temp > 0 else cpu_temp
             if temperature == 0:
-                # Last resort: estimate from load
                 temperature = 40.0 + (gpu_util * 0.4)
             
-            # Power: estimate from GPU utilization
-            # Typical GPU TDP: 150-250W, assume 200W
             power_draw = (gpu_util / 100.0) * 200.0
-            
-            # FPS from tracker
             fps = self._current_fps
             frame_time = 1000.0 / max(fps, 1.0) if fps > 0 else 0.0
             
@@ -253,7 +449,7 @@ class PerformanceMonitor:
             return self._get_fallback_metrics()
     
     def _get_fallback_metrics(self) -> PerformanceMetrics:
-        """Get fallback metrics (all zeros)"""
+        """Get fallback metrics"""
         return PerformanceMetrics(
             fps=0.0, frame_time=0.0, gpu_util=0.0, cpu_util=0.0,
             memory_used=0.0, memory_total=0.0, temperature=0.0, power_draw=0.0
@@ -341,6 +537,8 @@ class PerformanceMonitor:
                 'error_rate': self._error_count / max(self._metric_count, 1),
                 'callback_count': len(self._callbacks),
                 'resource_count': len(self._allocated_resources),
+                'history_size': len(self._metrics_history),
                 'psutil': PSUTIL_AVAILABLE,
                 'gputil': GPUTIL_AVAILABLE,
+                'bridge_connected': self._bridge is not None,
             }
