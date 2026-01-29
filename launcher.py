@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost Launcher
 
-Version: 0.3.5d_hotfix6 (Package 3.9a, Stage 7.8a)
+Version: 0.3.5d_hotfix7 (Package 3.9a, Stage 7.8a)
 
-Launcher with automatic PyQt6 fix and Liquid Glass UI
+Launcher with automatic PyQt6 fix and Modern Liquid Glass UI
 """
 import sys
 import os
@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 # Version info
-VERSION = '0.3.5d_hotfix6'
+VERSION = '0.3.5d_hotfix7'
 PACKAGE = '3.9a'
 STAGE = '7.8a'
 
@@ -85,13 +85,11 @@ def fix_pyqt6():
             print('      ✗ PyQt6 installation failed')
             print()
             print('[!] Could not fix PyQt6 automatically')
-            print('[!] Will use Legacy GUI instead')
             print()
             return False
             
     except Exception as e:
         print(f'[!] Auto-fix failed: {e}')
-        print('[!] Will use Legacy GUI instead')
         print()
         return False
 
@@ -130,63 +128,39 @@ def launch_modern_gui(retry_after_fix=True):
                 # Retry Modern GUI after fix
                 return launch_modern_gui(retry_after_fix=False)
             else:
-                # Fix failed, fallback to Legacy GUI
-                print('[*] Falling back to Legacy GUI...')
+                # Fix failed
+                print('[!] PyQt6 fix failed. Please try:')
+                print('    1. Run as Administrator')
+                print('    2. Check antivirus settings')
+                print('    3. Use CLI mode (option 2)')
                 print()
-                return launch_legacy_gui()
+                return False
         else:
             # Other import error
             print(f'[-] Failed to import PyQt6: {error_msg}')
-            print('[!] Installing PyQt6...')
             print()
             
-            # Try to install PyQt6
-            result = subprocess.run(
-                [sys.executable, '-m', 'pip', 'install', 'PyQt6'],
-                capture_output=True
-            )
+            if retry_after_fix:
+                print('[*] Attempting to install PyQt6...')
+                result = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', 'PyQt6'],
+                    capture_output=True
+                )
+                
+                if result.returncode == 0:
+                    print('[+] PyQt6 installed, retrying...')
+                    print()
+                    return launch_modern_gui(retry_after_fix=False)
             
-            if result.returncode == 0 and retry_after_fix:
-                print('[+] PyQt6 installed, retrying...')
-                print()
-                return launch_modern_gui(retry_after_fix=False)
-            else:
-                print('[!] PyQt6 installation failed')
-                print('[*] Falling back to Legacy GUI...')
-                print()
-                return launch_legacy_gui()
+            print('[!] PyQt6 required for Modern GUI')
+            print('[!] Please use CLI mode (option 2)')
+            print()
+            return False
                 
     except Exception as e:
         print(f'[-] GUI launch failed: {e}')
         import traceback
         traceback.print_exc()
-        return False
-
-def launch_legacy_gui():
-    """Launch legacy GUI (old design)"""
-    print('[*] Launching Legacy GUI...')
-    print('[!] Note: Legacy GUI has basic design')
-    print('[!] All features available, just different look')
-    print()
-    
-    try:
-        from PyQt6.QtWidgets import QApplication
-        from src.gui.main_window import MainWindow
-        
-        app = QApplication(sys.argv)
-        window = MainWindow()
-        window.show()
-        
-        print('[+] Legacy GUI launched')
-        print()
-        
-        sys.exit(app.exec())
-        
-    except Exception as e:
-        print(f'[-] Legacy GUI also failed: {e}')
-        print('[!] PyQt6 is required for any GUI mode')
-        print('[!] Use CLI mode instead')
-        print()
         return False
 
 def launch_cli():
@@ -210,20 +184,26 @@ def main():
     
     print('Select mode:')
     print()
-    print('  1. Modern GUI (New Liquid Glass UI) ⭐ RECOMMENDED')
-    print('  2. Legacy GUI (Old basic design)')
-    print('  3. CLI Mode')
+    print('  1. Modern GUI (Liquid Glass UI) ⭐ RECOMMENDED')
+    print('  2. CLI Mode (Terminal interface)')
     print('  0. Exit')
     print()
+    print('Note: Legacy GUI removed (broken dependencies)')
+    print()
     
-    choice = input('Select option (0-3): ').strip()
+    choice = input('Select option (0-2): ').strip()
     print()
     
     if choice == '1':
-        launch_modern_gui()
+        result = launch_modern_gui()
+        if not result:
+            print()
+            print('[*] Modern GUI failed. Try CLI mode (option 2)?')
+            retry = input('Launch CLI? (y/n): ').strip().lower()
+            if retry == 'y':
+                print()
+                launch_cli()
     elif choice == '2':
-        launch_legacy_gui()
-    elif choice == '3':
         launch_cli()
     elif choice == '0':
         print('[*] Exiting...')
