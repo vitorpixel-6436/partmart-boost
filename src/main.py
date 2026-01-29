@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5f (package 3.9a, stage 7.4/7.7)
+Version: 0.3.5g (package 3.9a, stage 7.5/7.7)
 
-Package 3.9a Stage 7.4: DataBus pub/sub system integration.
+Package 3.9a Stage 7.5: Advanced monitoring with history and analytics.
 
 Usage:
     python src/main.py              # Normal launch
@@ -19,9 +19,9 @@ import argparse
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-VERSION = "0.3.5f"
+VERSION = "0.3.5g"
 PACKAGE = "3.9a"
-STAGE = "7.4/7.7"
+STAGE = "7.5/7.7"
 
 
 def print_banner():

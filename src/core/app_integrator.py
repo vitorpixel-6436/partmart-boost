@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Application Integrator
 
-Version: 0.3.5f (package 3.9a, stage 7.4/7.7)
+Version: 0.3.5g (package 3.9a, stage 7.5/7.7)
 
 Unified access point for all application components.
 
-Package 3.9a Stage 7.4: DataBus integration.
+Package 3.9a Stage 7.5: Advanced monitoring integration.
 
 Features:
 - Unified component access
@@ -13,7 +13,8 @@ Features:
 - Health monitoring
 - Graceful degradation
 - Service manager access
-- DataBus pub/sub system (NEW)
+- DataBus pub/sub system
+- Performance history and analytics (NEW)
 """
 import time
 from typing import Optional, Dict, Any
@@ -31,7 +32,8 @@ class AppIntegrator:
     - BackendServiceManager: Backend services
     - PerformanceMonitor: Performance monitoring
     - ConfigManager: Configuration management
-    - DataBus: Event-based pub/sub system (NEW in Stage 7.4)
+    - DataBus: Event-based pub/sub system
+    - MonitoringIntegration: Performance history and analytics (NEW in Stage 7.5)
     
     Usage:
         integrator = AppIntegrator()
@@ -40,10 +42,11 @@ class AppIntegrator:
         bridge = integrator.get_bridge()
         qt_signals = integrator.get_qt_signals()
         monitor = integrator.get_monitor()
-        bus = integrator.get_data_bus()  # NEW
+        bus = integrator.get_data_bus()
+        monitoring = integrator.get_monitoring_integration()  # NEW
         
-        # Subscribe to bus events
-        bus.subscribe('performance.*', lambda msg: print(msg.data))
+        # Get analytics report
+        report = monitoring.get_latest_report()
         
         # Check health
         health = integrator.get_health()
@@ -65,6 +68,7 @@ class AppIntegrator:
         self._config = None
         self._data_bus = None
         self._bus_integration = None
+        self._monitoring_integration = None
         
         self._initialized = False
         self._init_time = time.perf_counter()
@@ -120,7 +124,7 @@ class AppIntegrator:
             print("[AppIntegrator] ✅ ServiceManager connected")
     
     def set_data_bus(self, data_bus):
-        """Set DataBus (Stage 7.4)
+        """Set DataBus
         
         Args:
             data_bus: DataBus instance
@@ -129,13 +133,22 @@ class AppIntegrator:
         print("[AppIntegrator] ✅ DataBus connected")
     
     def set_bus_integration(self, bus_integration):
-        """Set DataBusIntegration (Stage 7.4)
+        """Set DataBusIntegration
         
         Args:
             bus_integration: DataBusIntegration instance
         """
         self._bus_integration = bus_integration
         print("[AppIntegrator] ✅ BusIntegration connected")
+    
+    def set_monitoring_integration(self, monitoring_integration):
+        """Set MonitoringIntegration (Stage 7.5)
+        
+        Args:
+            monitoring_integration: MonitoringIntegration instance
+        """
+        self._monitoring_integration = monitoring_integration
+        print("[AppIntegrator] ✅ MonitoringIntegration connected")
     
     def get_bridge(self):
         """Get BackendBridge
@@ -178,7 +191,7 @@ class AppIntegrator:
         return self._config
     
     def get_data_bus(self):
-        """Get DataBus (Stage 7.4)
+        """Get DataBus
         
         Returns:
             DataBus instance or None
@@ -186,12 +199,20 @@ class AppIntegrator:
         return self._data_bus
     
     def get_bus_integration(self):
-        """Get DataBusIntegration (Stage 7.4)
+        """Get DataBusIntegration
         
         Returns:
             DataBusIntegration instance or None
         """
         return self._bus_integration
+    
+    def get_monitoring_integration(self):
+        """Get MonitoringIntegration (Stage 7.5)
+        
+        Returns:
+            MonitoringIntegration instance or None
+        """
+        return self._monitoring_integration
     
     def is_ready(self) -> bool:
         """Check if system is ready
@@ -216,6 +237,7 @@ class AppIntegrator:
             'config': 'pending' if self._config is None else 'ok',
             'data_bus': 'ok' if self._data_bus else 'pending',
             'bus_integration': 'ok' if self._bus_integration else 'pending',
+            'monitoring_integration': 'ok' if self._monitoring_integration else 'pending',
         }
         
         return health
@@ -229,7 +251,7 @@ class AppIntegrator:
         return time.perf_counter() - self._init_time
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get comprehensive stats (Stage 7.4)
+        """Get comprehensive stats (Stage 7.5)
         
         Returns:
             Statistics dictionary
@@ -254,6 +276,26 @@ class AppIntegrator:
                     'active': self._monitor.is_monitoring(),
                     'interval_ms': getattr(self._monitor, 'interval_ms', None),
                 }
+            except Exception:
+                pass
+        
+        # Add monitoring integration stats if available (NEW in Stage 7.5)
+        if self._monitoring_integration:
+            try:
+                history = self._monitoring_integration.get_history()
+                if history:
+                    stats['history'] = {
+                        'samples': history.get_count(),
+                        'uptime': history.get_uptime(),
+                    }
+                
+                report = self._monitoring_integration.get_latest_report()
+                if report:
+                    stats['analytics'] = {
+                        'score': report.score,
+                        'efficiency': report.efficiency,
+                        'bottleneck': report.bottleneck.type.value,
+                    }
             except Exception:
                 pass
         
@@ -289,6 +331,24 @@ class AppIntegrator:
                       f"{bus_stats.get('messages_delivered', 0)} delivered")
                 print(f"   Subscriptions: {bus_stats.get('subscriptions', 0)}")
                 print(f"   History: {bus_stats.get('history_size', 0)} messages")
+            except Exception:
+                pass
+        
+        # Print monitoring integration stats if available (NEW in Stage 7.5)
+        if self._monitoring_integration:
+            try:
+                history = self._monitoring_integration.get_history()
+                if history:
+                    print(f"\n📈 Performance History:")
+                    print(f"   Samples: {history.get_count()}")
+                    print(f"   Uptime: {history.get_uptime():.1f}s")
+                
+                report = self._monitoring_integration.get_latest_report()
+                if report:
+                    print(f"\n🎯 Analytics:")
+                    print(f"   Score: {report.score:.1f}/100")
+                    print(f"   Efficiency: {report.efficiency:.1f}/100")
+                    print(f"   Bottleneck: {report.bottleneck.type.value}")
             except Exception:
                 pass
         
