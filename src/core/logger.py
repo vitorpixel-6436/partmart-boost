@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Centralized Logger
 
-Version: 0.3.5j (package 3.9a, stage 7.7b.1/7.7)
-
-Package 3.9a Stage 7.7b.1: Logging infrastructure.
+Version: 0.3.5d_hotfix1 (package 3.9a, stage 7.7d_hotfix1)
 
 Features:
 - Singleton logger
@@ -52,7 +50,7 @@ class ColoredFormatter(logging.Formatter):
 class AppLogger:
     """Application Logger (Singleton)
     
-    v0.3.5j (package 3.9a, stage 7.7b.1/7.7)
+    v0.3.5d_hotfix1 (package 3.9a, stage 7.7d_hotfix1)
     
     Features:
     - Multiple log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -277,6 +275,10 @@ class AppLogger:
         return sorted(log_files)
 
 
+# Alias for compatibility
+PartMartLogger = AppLogger
+
+
 # Convenience functions for quick logging
 _logger_instance = None
 
@@ -289,6 +291,21 @@ def get_logger() -> AppLogger:
     global _logger_instance
     if _logger_instance is None:
         _logger_instance = AppLogger.get_instance()
+    return _logger_instance
+
+
+def init_logger(log_dir: str = 'logs', log_level: int = logging.INFO) -> AppLogger:
+    """Initialize logger with custom settings
+    
+    Args:
+        log_dir: Directory for log files
+        log_level: Minimum log level
+    
+    Returns:
+        AppLogger instance
+    """
+    global _logger_instance
+    _logger_instance = AppLogger.get_instance(log_dir, log_level)
     return _logger_instance
 
 
