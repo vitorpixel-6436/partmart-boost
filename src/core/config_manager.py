@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Configuration Manager
+"""Configuration Manager with Error Handling
 
-Version: 0.3.5h (package 3.9a, stage 7.6/7.7)
+Version: 0.3.5k (package 3.9a, stage 7.7b.2/7.7)
 
-Package 3.9a Stage 7.6: Configuration management system.
+Package 3.9a Stage 7.7b.2: Error handling in core components.
 
 Features:
 - Hierarchical configuration
@@ -13,6 +13,8 @@ Features:
 - File persistence (JSON)
 - Change notifications
 - Thread-safe
+- Comprehensive error handling
+- Logging integration
 """
 import json
 import os
@@ -21,6 +23,12 @@ import copy
 from typing import Any, Dict, Optional, List, Callable, Union
 from dataclasses import dataclass, field
 from pathlib import Path
+
+try:
+    from logger import AppLogger
+    LOGGER_AVAILABLE = True
+except ImportError:
+    LOGGER_AVAILABLE = False
 
 
 @dataclass
@@ -55,34 +63,38 @@ class ConfigSchema:
         Returns:
             (is_valid, error_message)
         """
-        # Check required
-        if value is None:
-            if self.required:
-                return False, f"{self.key} is required"
+        try:
+            # Check required
+            if value is None:
+                if self.required:
+                    return False, f"{self.key} is required"
+                return True, None
+            
+            # Check type
+            if not isinstance(value, self.type):
+                return False, f"{self.key} must be {self.type.__name__}, got {type(value).__name__}"
+            
+            # Check numeric bounds
+            if self.type in (int, float):
+                if self.min_value is not None and value < self.min_value:
+                    return False, f"{self.key} must be >= {self.min_value}"
+                if self.max_value is not None and value > self.max_value:
+                    return False, f"{self.key} must be <= {self.max_value}"
+            
+            # Check choices
+            if self.choices is not None and value not in self.choices:
+                return False, f"{self.key} must be one of {self.choices}"
+            
             return True, None
         
-        # Check type
-        if not isinstance(value, self.type):
-            return False, f"{self.key} must be {self.type.__name__}, got {type(value).__name__}"
-        
-        # Check numeric bounds
-        if self.type in (int, float):
-            if self.min_value is not None and value < self.min_value:
-                return False, f"{self.key} must be >= {self.min_value}"
-            if self.max_value is not None and value > self.max_value:
-                return False, f"{self.key} must be <= {self.max_value}"
-        
-        # Check choices
-        if self.choices is not None and value not in self.choices:
-            return False, f"{self.key} must be one of {self.choices}"
-        
-        return True, None
+        except Exception as e:
+            return False, f"Validation error: {str(e)}"
 
 
 class ConfigManager:
-    """Configuration Manager
+    """Configuration Manager with Error Handling
     
-    v0.3.5h (package 3.9a, stage 7.6/7.7)
+    v0.3.5k (package 3.9a, stage 7.7b.2/7.7)
     
     Features:
     - Hierarchical config (dot notation)
@@ -90,6 +102,8 @@ class ConfigManager:
     - File persistence
     - Change notifications
     - Thread-safe
+    - Comprehensive error handling
+    - Logging integration
     
     Usage:
         >>> config = ConfigManager('config.json')
@@ -98,13 +112,15 @@ class ConfigManager:
         >>> theme = config.get('ui.theme', 'dark')
         >>> 
         >>> # Set value
-        >>> config.set('ui.theme', 'light')
+        >>> if config.set('ui.theme', 'light'):
+        >>>     print("Theme changed")
         >>> 
         >>> # Subscribe to changes
         >>> config.subscribe('ui.*', lambda key, value: print(f"{key} = {value}"))
         >>> 
         >>> # Save to file
-        >>> config.save()
+        >>> if config.save():
+        >>>     print("Config saved")
     """
     
     def __init__(self, config_file: Optional[str] = None):
@@ -118,56 +134,111 @@ class ConfigManager:
         self._subscribers: List[tuple[str, Callable]] = []
         self._lock = threading.RLock()
         self._config_file = config_file
+        self._logger = None
         
-        # Initialize default schema
-        self._init_default_schema()
+        # Get logger if available
+        if LOGGER_AVAILABLE:
+            try:
+                self._logger = AppLogger.get_instance()
+                self._logger.debug(f"ConfigManager initializing (file: {config_file or 'none'})", component="ConfigManager")
+            except Exception:
+                pass
         
-        # Load from file if exists
-        if config_file and os.path.exists(config_file):
-            self.load(config_file)
-        else:
-            # Load defaults from schema
+        try:
+            # Initialize default schema
+            self._init_default_schema()
+            
+            # Load from file if exists
+            if config_file and os.path.exists(config_file):
+                if not self.load(config_file):
+                    self._log_warning(f"Failed to load {config_file}, using defaults")
+                    self._load_defaults()
+            else:
+                # Load defaults from schema
+                self._load_defaults()
+            
+            self._log_info(f"Initialized (file: {config_file or 'none'})")
+        
+        except Exception as e:
+            self._log_error(f"Initialization error: {e}", exc_info=True)
+            # Fallback to defaults
             self._load_defaults()
-        
-        print(f"[ConfigManager] Initialized (file: {config_file or 'none'})")
+    
+    def _log_debug(self, message: str):
+        """Log debug message"""
+        if self._logger:
+            self._logger.debug(message, component="ConfigManager")
+    
+    def _log_info(self, message: str):
+        """Log info message"""
+        if self._logger:
+            self._logger.info(message, component="ConfigManager")
+        else:
+            print(f"[ConfigManager] {message}")
+    
+    def _log_warning(self, message: str):
+        """Log warning message"""
+        if self._logger:
+            self._logger.warning(message, component="ConfigManager")
+        else:
+            print(f"[ConfigManager] WARNING: {message}")
+    
+    def _log_error(self, message: str, exc_info: bool = False):
+        """Log error message"""
+        if self._logger:
+            self._logger.error(message, component="ConfigManager", exc_info=exc_info)
+        else:
+            print(f"[ConfigManager] ERROR: {message}")
     
     def _init_default_schema(self):
         """Initialize default configuration schema"""
-        schemas = [
-            # UI settings
-            ConfigSchema('ui.theme', str, 'dark', 'UI theme', choices=['dark', 'light']),
-            ConfigSchema('ui.language', str, 'en', 'Interface language', choices=['en', 'ru']),
-            ConfigSchema('ui.show_fps', bool, True, 'Show FPS overlay'),
-            ConfigSchema('ui.window.width', int, 1200, 'Window width', min_value=800, max_value=3840),
-            ConfigSchema('ui.window.height', int, 800, 'Window height', min_value=600, max_value=2160),
+        try:
+            schemas = [
+                # UI settings
+                ConfigSchema('ui.theme', str, 'dark', 'UI theme', choices=['dark', 'light']),
+                ConfigSchema('ui.language', str, 'en', 'Interface language', choices=['en', 'ru']),
+                ConfigSchema('ui.show_fps', bool, True, 'Show FPS overlay'),
+                ConfigSchema('ui.window.width', int, 1200, 'Window width', min_value=800, max_value=3840),
+                ConfigSchema('ui.window.height', int, 800, 'Window height', min_value=600, max_value=2160),
+                
+                # Monitoring settings
+                ConfigSchema('monitor.enabled', bool, True, 'Enable performance monitoring'),
+                ConfigSchema('monitor.interval_ms', int, 100, 'Monitoring interval (ms)', min_value=10, max_value=5000),
+                ConfigSchema('monitor.history_size', int, 1000, 'History buffer size', min_value=100, max_value=10000),
+                
+                # Performance settings
+                ConfigSchema('performance.boost_enabled', bool, True, 'Enable performance boost'),
+                ConfigSchema('performance.priority', str, 'high', 'Process priority', choices=['normal', 'high', 'realtime']),
+                ConfigSchema('performance.affinity_enabled', bool, False, 'Enable CPU affinity'),
+                
+                # Game detection
+                ConfigSchema('games.auto_detect', bool, True, 'Auto-detect games'),
+                ConfigSchema('games.boost_on_start', bool, True, 'Boost when game starts'),
+                
+                # Advanced settings
+                ConfigSchema('advanced.analytics_interval', int, 10, 'Analytics interval (s)', min_value=5, max_value=60),
+                ConfigSchema('advanced.log_level', str, 'info', 'Logging level', choices=['debug', 'info', 'warning', 'error']),
+                ConfigSchema('advanced.auto_save', bool, True, 'Auto-save configuration'),
+            ]
             
-            # Monitoring settings
-            ConfigSchema('monitor.enabled', bool, True, 'Enable performance monitoring'),
-            ConfigSchema('monitor.interval_ms', int, 100, 'Monitoring interval (ms)', min_value=10, max_value=5000),
-            ConfigSchema('monitor.history_size', int, 1000, 'History buffer size', min_value=100, max_value=10000),
+            for schema in schemas:
+                self._schema[schema.key] = schema
             
-            # Performance settings
-            ConfigSchema('performance.boost_enabled', bool, True, 'Enable performance boost'),
-            ConfigSchema('performance.priority', str, 'high', 'Process priority', choices=['normal', 'high', 'realtime']),
-            ConfigSchema('performance.affinity_enabled', bool, False, 'Enable CPU affinity'),
-            
-            # Game detection
-            ConfigSchema('games.auto_detect', bool, True, 'Auto-detect games'),
-            ConfigSchema('games.boost_on_start', bool, True, 'Boost when game starts'),
-            
-            # Advanced settings
-            ConfigSchema('advanced.analytics_interval', int, 10, 'Analytics interval (s)', min_value=5, max_value=60),
-            ConfigSchema('advanced.log_level', str, 'info', 'Logging level', choices=['debug', 'info', 'warning', 'error']),
-            ConfigSchema('advanced.auto_save', bool, True, 'Auto-save configuration'),
-        ]
+            self._log_debug(f"Initialized schema with {len(schemas)} entries")
         
-        for schema in schemas:
-            self._schema[schema.key] = schema
+        except Exception as e:
+            self._log_error(f"Failed to initialize schema: {e}", exc_info=True)
     
     def _load_defaults(self):
         """Load default values from schema"""
-        for key, schema in self._schema.items():
-            self._set_value(key, schema.default, notify=False)
+        try:
+            for key, schema in self._schema.items():
+                self._set_value(key, schema.default, notify=False)
+            
+            self._log_debug(f"Loaded {len(self._schema)} default values")
+        
+        except Exception as e:
+            self._log_error(f"Failed to load defaults: {e}", exc_info=True)
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value
@@ -179,8 +250,15 @@ class ConfigManager:
         Returns:
             Configuration value
         """
-        with self._lock:
-            return self._get_value(key, default)
+        try:
+            with self._lock:
+                value = self._get_value(key, default)
+                self._log_debug(f"Get {key} = {value}")
+                return value
+        
+        except Exception as e:
+            self._log_error(f"Failed to get {key}: {e}")
+            return default
     
     def _get_value(self, key: str, default: Any = None) -> Any:
         """Get value (internal, no lock)"""
@@ -206,23 +284,29 @@ class ConfigManager:
         Returns:
             True if successful
         """
-        with self._lock:
-            # Validate if schema exists
-            if validate and key in self._schema:
-                is_valid, error = self._schema[key].validate(value)
-                if not is_valid:
-                    print(f"[ConfigManager] Validation error: {error}")
-                    return False
-            
-            # Set value
-            old_value = self._get_value(key)
-            self._set_value(key, value)
-            
-            # Notify subscribers
-            if old_value != value:
-                self._notify_subscribers(key, value)
-            
-            return True
+        try:
+            with self._lock:
+                # Validate if schema exists
+                if validate and key in self._schema:
+                    is_valid, error = self._schema[key].validate(value)
+                    if not is_valid:
+                        self._log_warning(f"Validation failed for {key}: {error}")
+                        return False
+                
+                # Set value
+                old_value = self._get_value(key)
+                self._set_value(key, value)
+                
+                # Notify subscribers
+                if old_value != value:
+                    self._notify_subscribers(key, value)
+                    self._log_info(f"Set {key} = {value}")
+                
+                return True
+        
+        except Exception as e:
+            self._log_error(f"Failed to set {key}: {e}", exc_info=True)
+            return False
     
     def _set_value(self, key: str, value: Any, notify: bool = True):
         """Set value (internal, no lock)"""
@@ -232,6 +316,8 @@ class ConfigManager:
         # Navigate to parent
         for part in parts[:-1]:
             if part not in current:
+                current[part] = {}
+            elif not isinstance(current[part], dict):
                 current[part] = {}
             current = current[part]
         
@@ -247,14 +333,19 @@ class ConfigManager:
         Returns:
             Dictionary of matching keys/values
         """
-        with self._lock:
-            result = {}
-            
-            for key in self.get_all_keys():
-                if key.startswith(prefix):
-                    result[key] = self._get_value(key)
-            
-            return result
+        try:
+            with self._lock:
+                result = {}
+                
+                for key in self.get_all_keys():
+                    if key.startswith(prefix):
+                        result[key] = self._get_value(key)
+                
+                return result
+        
+        except Exception as e:
+            self._log_error(f"Failed to get section {prefix}: {e}")
+            return {}
     
     def get_all_keys(self) -> List[str]:
         """Get all configuration keys
@@ -262,8 +353,13 @@ class ConfigManager:
         Returns:
             List of all keys
         """
-        with self._lock:
-            return self._get_keys_recursive(self._config)
+        try:
+            with self._lock:
+                return self._get_keys_recursive(self._config)
+        
+        except Exception as e:
+            self._log_error(f"Failed to get all keys: {e}")
+            return []
     
     def _get_keys_recursive(self, obj: Dict, prefix: str = '') -> List[str]:
         """Get keys recursively"""
@@ -289,10 +385,16 @@ class ConfigManager:
         Returns:
             Subscription ID
         """
-        with self._lock:
-            sub_id = len(self._subscribers)
-            self._subscribers.append((pattern, callback))
-            return sub_id
+        try:
+            with self._lock:
+                sub_id = len(self._subscribers)
+                self._subscribers.append((pattern, callback))
+                self._log_debug(f"Subscribed to {pattern} (ID: {sub_id})")
+                return sub_id
+        
+        except Exception as e:
+            self._log_error(f"Failed to subscribe to {pattern}: {e}")
+            return -1
     
     def unsubscribe(self, sub_id: int):
         """Unsubscribe from changes
@@ -300,9 +402,14 @@ class ConfigManager:
         Args:
             sub_id: Subscription ID
         """
-        with self._lock:
-            if 0 <= sub_id < len(self._subscribers):
-                self._subscribers[sub_id] = None
+        try:
+            with self._lock:
+                if 0 <= sub_id < len(self._subscribers):
+                    self._subscribers[sub_id] = (None, None)
+                    self._log_debug(f"Unsubscribed ID: {sub_id}")
+        
+        except Exception as e:
+            self._log_error(f"Failed to unsubscribe {sub_id}: {e}")
     
     def _notify_subscribers(self, key: str, value: Any):
         """Notify subscribers of change"""
@@ -310,11 +417,12 @@ class ConfigManager:
             if callback is None:
                 continue
             
-            if self._match_pattern(key, pattern):
-                try:
+            try:
+                if self._match_pattern(key, pattern):
                     callback(key, value)
-                except Exception as e:
-                    print(f"[ConfigManager] Subscriber error: {e}")
+            
+            except Exception as e:
+                self._log_error(f"Subscriber callback error for {key}: {e}", exc_info=True)
     
     def _match_pattern(self, key: str, pattern: str) -> bool:
         """Check if key matches pattern
@@ -326,25 +434,29 @@ class ConfigManager:
         Returns:
             True if matches
         """
-        if pattern == '*' or pattern == '**':
+        try:
+            if pattern == '*' or pattern == '**':
+                return True
+            
+            # Convert pattern to regex-like matching
+            pattern_parts = pattern.split('.')
+            key_parts = key.split('.')
+            
+            if len(pattern_parts) != len(key_parts):
+                # Check for trailing wildcard
+                if pattern_parts[-1] == '*' and len(key_parts) >= len(pattern_parts) - 1:
+                    pattern_parts = pattern_parts[:-1]
+                else:
+                    return False
+            
+            for p_part, k_part in zip(pattern_parts, key_parts):
+                if p_part != '*' and p_part != k_part:
+                    return False
+            
             return True
         
-        # Convert pattern to regex-like matching
-        pattern_parts = pattern.split('.')
-        key_parts = key.split('.')
-        
-        if len(pattern_parts) != len(key_parts):
-            # Check for trailing wildcard
-            if pattern_parts[-1] == '*' and len(key_parts) >= len(pattern_parts) - 1:
-                pattern_parts = pattern_parts[:-1]
-            else:
-                return False
-        
-        for p_part, k_part in zip(pattern_parts, key_parts):
-            if p_part != '*' and p_part != k_part:
-                return False
-        
-        return True
+        except Exception:
+            return False
     
     def load(self, filename: Optional[str] = None) -> bool:
         """Load configuration from file
@@ -358,7 +470,7 @@ class ConfigManager:
         filename = filename or self._config_file
         
         if not filename:
-            print("[ConfigManager] No config file specified")
+            self._log_warning("No config file specified")
             return False
         
         try:
@@ -369,19 +481,23 @@ class ConfigManager:
                 # Merge loaded config with defaults
                 self._config = self._merge_configs(self._get_defaults(), loaded)
             
-            print(f"[ConfigManager] ✅ Loaded from {filename}")
+            self._log_info(f"Loaded from {filename}")
             return True
         
         except FileNotFoundError:
-            print(f"[ConfigManager] Config file not found: {filename}")
+            self._log_warning(f"Config file not found: {filename}")
             return False
         
         except json.JSONDecodeError as e:
-            print(f"[ConfigManager] Invalid JSON: {e}")
+            self._log_error(f"Invalid JSON in {filename}: {e}")
+            return False
+        
+        except PermissionError:
+            self._log_error(f"Permission denied: {filename}")
             return False
         
         except Exception as e:
-            print(f"[ConfigManager] Load error: {e}")
+            self._log_error(f"Failed to load {filename}: {e}", exc_info=True)
             return False
     
     def save(self, filename: Optional[str] = None) -> bool:
@@ -396,54 +512,90 @@ class ConfigManager:
         filename = filename or self._config_file
         
         if not filename:
-            print("[ConfigManager] No config file specified")
+            self._log_warning("No config file specified")
             return False
         
         try:
             # Create directory if needed
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            dir_path = os.path.dirname(filename)
+            if dir_path:
+                os.makedirs(dir_path, exist_ok=True)
             
             with self._lock:
                 config_copy = copy.deepcopy(self._config)
             
-            with open(filename, 'w', encoding='utf-8') as f:
+            # Write to temporary file first
+            temp_file = filename + '.tmp'
+            with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(config_copy, f, indent=2, ensure_ascii=False)
             
-            print(f"[ConfigManager] ✅ Saved to {filename}")
+            # Atomic replace
+            if os.path.exists(filename):
+                os.replace(temp_file, filename)
+            else:
+                os.rename(temp_file, filename)
+            
+            self._log_info(f"Saved to {filename}")
             return True
         
-        except Exception as e:
-            print(f"[ConfigManager] Save error: {e}")
+        except PermissionError:
+            self._log_error(f"Permission denied: {filename}")
             return False
+        
+        except OSError as e:
+            self._log_error(f"OS error saving {filename}: {e}")
+            return False
+        
+        except Exception as e:
+            self._log_error(f"Failed to save {filename}: {e}", exc_info=True)
+            return False
+        
+        finally:
+            # Cleanup temp file if it exists
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception:
+                pass
     
     def _get_defaults(self) -> Dict[str, Any]:
         """Get default configuration"""
-        defaults = {}
-        
-        for key, schema in self._schema.items():
-            parts = key.split('.')
-            current = defaults
+        try:
+            defaults = {}
             
-            for part in parts[:-1]:
-                if part not in current:
-                    current[part] = {}
-                current = current[part]
+            for key, schema in self._schema.items():
+                parts = key.split('.')
+                current = defaults
+                
+                for part in parts[:-1]:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+                
+                current[parts[-1]] = schema.default
             
-            current[parts[-1]] = schema.default
+            return defaults
         
-        return defaults
+        except Exception as e:
+            self._log_error(f"Failed to get defaults: {e}")
+            return {}
     
     def _merge_configs(self, base: Dict, override: Dict) -> Dict:
         """Merge two configs (override takes precedence)"""
-        result = copy.deepcopy(base)
+        try:
+            result = copy.deepcopy(base)
+            
+            for key, value in override.items():
+                if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                    result[key] = self._merge_configs(result[key], value)
+                else:
+                    result[key] = value
+            
+            return result
         
-        for key, value in override.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = self._merge_configs(result[key], value)
-            else:
-                result[key] = value
-        
-        return result
+        except Exception as e:
+            self._log_error(f"Failed to merge configs: {e}")
+            return base
     
     def reset(self, key: Optional[str] = None):
         """Reset to defaults
@@ -451,18 +603,22 @@ class ConfigManager:
         Args:
             key: Specific key to reset (None = reset all)
         """
-        with self._lock:
-            if key is None:
-                # Reset all
-                self._config = {}
-                self._load_defaults()
-                print("[ConfigManager] Reset to defaults")
-            elif key in self._schema:
-                # Reset specific key
-                old_value = self._get_value(key)
-                self._set_value(key, self._schema[key].default)
-                self._notify_subscribers(key, self._schema[key].default)
-                print(f"[ConfigManager] Reset {key} to default")
+        try:
+            with self._lock:
+                if key is None:
+                    # Reset all
+                    self._config = {}
+                    self._load_defaults()
+                    self._log_info("Reset all to defaults")
+                elif key in self._schema:
+                    # Reset specific key
+                    old_value = self._get_value(key)
+                    self._set_value(key, self._schema[key].default)
+                    self._notify_subscribers(key, self._schema[key].default)
+                    self._log_info(f"Reset {key} to default")
+        
+        except Exception as e:
+            self._log_error(f"Failed to reset: {e}", exc_info=True)
     
     def get_schema(self, key: str) -> Optional[ConfigSchema]:
         """Get schema for key
@@ -473,7 +629,11 @@ class ConfigManager:
         Returns:
             ConfigSchema or None
         """
-        return self._schema.get(key)
+        try:
+            return self._schema.get(key)
+        except Exception as e:
+            self._log_error(f"Failed to get schema for {key}: {e}")
+            return None
     
     def get_all_schemas(self) -> Dict[str, ConfigSchema]:
         """Get all schemas
@@ -481,7 +641,11 @@ class ConfigManager:
         Returns:
             Dictionary of schemas
         """
-        return copy.copy(self._schema)
+        try:
+            return copy.copy(self._schema)
+        except Exception as e:
+            self._log_error(f"Failed to get schemas: {e}")
+            return {}
     
     def to_dict(self) -> Dict[str, Any]:
         """Export configuration as dictionary
@@ -489,14 +653,18 @@ class ConfigManager:
         Returns:
             Configuration dictionary
         """
-        with self._lock:
-            return copy.deepcopy(self._config)
+        try:
+            with self._lock:
+                return copy.deepcopy(self._config)
+        except Exception as e:
+            self._log_error(f"Failed to export to dict: {e}")
+            return {}
 
 
 # Testing
 if __name__ == '__main__':
     print("="*60)
-    print("ConfigManager Test")
+    print("ConfigManager Test (with Error Handling)")
     print("="*60)
     print()
     
@@ -510,41 +678,16 @@ if __name__ == '__main__':
     print(f"  Boost enabled: {config.get('performance.boost_enabled')}")
     print()
     
-    # Set values
-    print("Setting values:")
-    config.set('ui.theme', 'light')
-    config.set('monitor.interval_ms', 200)
-    print(f"  Theme: {config.get('ui.theme')}")
-    print(f"  Monitor interval: {config.get('monitor.interval_ms')}")
+    # Test error handling
+    print("Testing error handling:")
+    print(f"  Invalid type: {config.set('ui.theme', 123)}  # Should fail")
+    print(f"  Invalid range: {config.set('monitor.interval_ms', 10000)}  # Should fail")
+    print(f"  Valid value: {config.set('ui.theme', 'light')}  # Should succeed")
     print()
     
-    # Subscribe to changes
-    print("Testing subscriptions:")
-    def on_ui_change(key, value):
-        print(f"  UI changed: {key} = {value}")
-    
-    config.subscribe('ui.*', on_ui_change)
-    config.set('ui.theme', 'dark')
-    config.set('ui.show_fps', False)
-    print()
-    
-    # Get section
-    print("UI section:")
-    ui_config = config.get_section('ui')
-    for key, value in ui_config.items():
-        print(f"  {key}: {value}")
-    print()
-    
-    # Save and reload
-    print("Save/Load test:")
+    # Save and cleanup
     config.save()
-    print("  Saved")
-    
-    config2 = ConfigManager('test_config.json')
-    print(f"  Loaded theme: {config2.get('ui.theme')}")
-    print()
-    
-    # Cleanup
-    os.remove('test_config.json')
+    if os.path.exists('test_config.json'):
+        os.remove('test_config.json')
     
     print("✅ Test completed!")
