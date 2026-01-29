@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """System Initialization
 
-Version: 0.3.5f (package 3.9a, stage 7.4/7.7)
+Version: 0.3.5g (package 3.9a, stage 7.5/7.7)
 
 System initialization manager for proper startup sequence.
 
-Package 3.9a Stage 7.4: DataBus integration.
+Package 3.9a Stage 7.5: Advanced monitoring integration.
 
 Features:
 - Dependency validation
 - Component initialization
 - Backend services integration
-- DataBus pub/sub system (NEW)
+- DataBus pub/sub system
+- Performance history and analytics (NEW)
 - Error recovery
 - Health checks
 """
@@ -40,18 +41,16 @@ class SystemInitializer:
     
     Manages proper initialization of all system components.
     
-    Initialization Order (Stage 7.4):
+    Initialization Order (Stage 7.5):
     1. Check dependencies
     2. Initialize BackendBridge
     3. Create QtSignalBridge
-    4. Initialize DataBus (NEW)
-    5. Create DataBusIntegration (NEW)
+    4. Initialize DataBus
+    5. Create DataBusIntegration
     6. Initialize BackendServiceManager
-    7. Register command handlers
-    8. Register query handlers
-    9. Start monitoring
-    10. Create AppIntegrator
-    11. Ready for UI
+    7. Initialize MonitoringIntegration (NEW)
+    8. Create AppIntegrator
+    9. Ready for UI
     
     Usage:
         init = SystemInitializer()
@@ -74,6 +73,7 @@ class SystemInitializer:
         self._service_manager = None
         self._data_bus = None
         self._bus_integration = None
+        self._monitoring_integration = None
         
         print(f"[SystemInit] Mode: {mode}")
     
@@ -125,7 +125,7 @@ class SystemInitializer:
                     time_ms=(time.perf_counter() - start_time) * 1000
                 )
             
-            # Step 4: Initialize DataBus (NEW in Stage 7.4)
+            # Step 4: Initialize DataBus
             bus_result = self._init_data_bus()
             self.results.append(bus_result)
             
@@ -139,7 +139,14 @@ class SystemInitializer:
             if not services_result.success:
                 print(f"[SystemInit] ⚠️ Backend services failed (non-critical)")
             
-            # Step 6: Create AppIntegrator
+            # Step 6: Initialize monitoring integration (NEW in Stage 7.5)
+            monitoring_result = self._init_monitoring_integration()
+            self.results.append(monitoring_result)
+            
+            if not monitoring_result.success:
+                print(f"[SystemInit] ⚠️ Monitoring integration failed (non-critical)")
+            
+            # Step 7: Create AppIntegrator
             integrator_result = self._create_integrator()
             self.results.append(integrator_result)
             
@@ -320,7 +327,7 @@ class SystemInitializer:
             )
     
     def _init_data_bus(self) -> InitResult:
-        """Initialize DataBus (Stage 7.4)"""
+        """Initialize DataBus"""
         start_time = time.perf_counter()
         warnings = []
         
@@ -432,6 +439,63 @@ class SystemInitializer:
                 time_ms=(time.perf_counter() - start_time) * 1000
             )
     
+    def _init_monitoring_integration(self) -> InitResult:
+        """Initialize monitoring integration (Stage 7.5)"""
+        start_time = time.perf_counter()
+        warnings = []
+        
+        print("[SystemInit] Initializing monitoring integration...")
+        
+        try:
+            from monitoring_integration import MonitoringIntegration
+            
+            # Get monitor from service manager
+            monitor = None
+            if self._service_manager:
+                monitor = self._service_manager.get_monitor()
+            
+            # Create monitoring integration
+            self._monitoring_integration = MonitoringIntegration(
+                monitor=monitor,
+                data_bus=self._data_bus,
+                history_size=1000
+            )
+            
+            # Start integration
+            if monitor:
+                self._monitoring_integration.start()
+                print("[SystemInit] ✅ Monitoring integration initialized and started")
+            else:
+                warnings.append("Monitor not available, integration not started")
+                print("[SystemInit] ⚠️ Monitoring integration created but not started")
+            
+            return InitResult(
+                success=True,
+                component='monitoring_integration',
+                warnings=warnings,
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
+        
+        except ImportError as e:
+            warnings.append(f"Monitoring integration unavailable: {e}")
+            
+            print(f"[SystemInit] ⚠️ Monitoring integration unavailable: {e}")
+            
+            return InitResult(
+                success=False,
+                component='monitoring_integration',
+                warnings=warnings,
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
+        
+        except Exception as e:
+            return InitResult(
+                success=False,
+                component='monitoring_integration',
+                error=str(e),
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
+    
     def _create_integrator(self) -> InitResult:
         """Create AppIntegrator"""
         start_time = time.perf_counter()
@@ -447,9 +511,13 @@ class SystemInitializer:
             if self._service_manager:
                 self._integrator.set_service_manager(self._service_manager)
             
-            # Set DataBus if available (NEW in Stage 7.4)
+            # Set DataBus if available
             if self._data_bus:
                 self._integrator.set_data_bus(self._data_bus)
+            
+            # Set monitoring integration if available (NEW in Stage 7.5)
+            if self._monitoring_integration:
+                self._integrator.set_monitoring_integration(self._monitoring_integration)
             
             print("[SystemInit] ✅ AppIntegrator created")
             
@@ -484,7 +552,7 @@ class SystemInitializer:
         return self._service_manager
     
     def get_data_bus(self):
-        """Get DataBus instance (Stage 7.4)
+        """Get DataBus instance
         
         Returns:
             DataBus instance or None
@@ -492,12 +560,20 @@ class SystemInitializer:
         return self._data_bus
     
     def get_bus_integration(self):
-        """Get DataBusIntegration instance (Stage 7.4)
+        """Get DataBusIntegration instance
         
         Returns:
             DataBusIntegration instance or None
         """
         return self._bus_integration
+    
+    def get_monitoring_integration(self):
+        """Get MonitoringIntegration instance (Stage 7.5)
+        
+        Returns:
+            MonitoringIntegration instance or None
+        """
+        return self._monitoring_integration
     
     def get_results(self) -> List[InitResult]:
         """Get initialization results
