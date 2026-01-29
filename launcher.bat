@@ -1,16 +1,16 @@
 @echo off
 REM PartMart Boost Launcher for Windows
-REM Version: 0.3.5d_hotfix7 (Package 3.9a, Stage 7.8a)
-REM Modern GUI only - Auto-fix PyQt6 errors
+REM Version: 0.3.5d_hotfix8 (Package 3.9a, Stage 7.8a)
+REM Standalone Modern GUI with cache cleanup
 
-title PartMart Boost - Stage 7.8a (hotfix7)
+title PartMart Boost - Stage 7.8a (hotfix8)
 
 echo ========================================================
 echo.
 echo     PARTMART BOOST LAUNCHER
-echo     Version: 0.3.5d_hotfix7 (Package 3.9a, Stage 7.8a)
+echo     Version: 0.3.5d_hotfix8 (Package 3.9a, Stage 7.8a)
 echo     Liquid Glass UI Revolution
-echo     Auto-Fix: PyQt6 DLL errors
+echo     Auto-Fix: PyQt6 + Cache cleanup
 echo.
 echo ========================================================
 echo.
@@ -37,11 +37,11 @@ echo [+] Basic dependencies ready
 echo.
 
 echo [*] Launching PartMart Boost...
+echo [*] Standalone GUI - no cache issues!
 echo [*] PyQt6 will be auto-fixed if needed
-echo [*] Only Modern GUI available (Legacy removed)
 echo.
 
-REM Launch launcher.py with auto-fix support
+REM Launch with cache cleanup
 python launcher.py
 
 if %errorlevel% neq 0 (
