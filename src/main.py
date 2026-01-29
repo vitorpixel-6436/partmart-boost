@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PartMart Boost - Main Entry Point
 
-Version: 0.3.5n (package 3.9a, stage 7.7b.5/7.7)
+Version: 0.3.5n (package 3.9a, stage 7.7b.5.1/7.7)
 
-Package 3.9a Stage 7.7b.5: Error handling in service layer.
+Package 3.9a Stage 7.7b.5.1: Error handling in PerformanceMonitor service.
 
 Usage:
     python src/main.py              # Normal launch
@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 VERSION = "0.3.5n"
 PACKAGE = "3.9a"
-STAGE = "7.7b.5/7.7"
+STAGE = "7.7b.5.1/7.7"
 
 
 def print_banner():
@@ -142,7 +142,7 @@ def main():
             integrator.print_status()
         
         # Launch GUI (unless --no-gui)
-        if not args.no-gui:
+        if not args.no_gui:
             print("Launching GUI...\n")
             
             try:

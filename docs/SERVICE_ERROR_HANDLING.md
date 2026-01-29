@@ -1,430 +1,411 @@
 # Service Layer Error Handling
 
-**Version:** 0.3.5n (Package 3.9a, Stage 7.7b.5/7.7)
+**Version:** 0.3.5n (Package 3.9a, Stage 7.7b.5.1/7.7)
 
 ## Overview
 
-Error handling in service layer components that provide core functionality.
+Error handling in backend services with automatic recovery and health monitoring.
 
-## Components
+## PerformanceMonitor Error Handling
 
-### PerformanceMonitor
+### Overview
 
-Advanced performance analytics service with comprehensive error handling.
+Real-time hardware monitoring service with comprehensive error handling.
 
-#### Error Scenarios
+**Features:**
+- CPU, GPU, RAM, FPS monitoring
+- Temperature monitoring
+- Metrics validation
+- Automatic recovery
+- Error tracking
+- Callback system
 
-**1. Manager Interface Errors**
+### Error Scenarios
+
+#### 1. Hardware Access Errors
+
+**CPU Reading Failure:**
 ```python
-try:
-    cpu_load = manager.get_cpu_load()
-except Exception as e:
-    logger.error(f"Failed to get CPU load: {e}")
-    cpu_load = 0.0  # Fallback
-```
-
-**2. Invalid Data Values**
-```python
-# Validate and clamp
-cpu_load = self._validate_load_value(cpu_load, "CPU load")
-
-# Values outside 0-100 are clamped
-if value < 0 or value > 100:
-    return max(0.0, min(100.0, value))
-```
-
-**3. Insufficient Data**
-```python
-def get_performance_score(self):
-    if not self._snapshots:
-        return 0.0  # No data available
-    
-    # Calculate score...
-```
-
-**4. Calculation Errors**
-```python
-try:
-    correlation = np.corrcoef(cpu_loads, fps_values)[0, 1]
-    if not np.isnan(correlation):
-        self._cpu_fps_correlation = correlation
-except (ValueError, FloatingPointError, np.linalg.LinAlgError) as e:
-    logger.warning(f"Correlation calculation error: {e}")
-```
-
-**5. Error Threshold**
-```python
-# Track errors over time
-if self._error_count >= self._max_errors:
-    logger.error("Too many errors, monitor disabled")
-    return False
-```
-
-#### Error Recovery
-
-**Automatic Recovery:**
-- Invalid data values are clamped to valid ranges
-- Missing data uses fallback values (0.0)
-- Calculation errors are logged and skipped
-- Error counter resets after 60 seconds
-- Returns last known good values on error
-
-**Manual Recovery:**
-```python
-# Reset monitor
-monitor.reset()
-
-# Check status
-status = monitor.get_status()
-if status['error_count'] > 5:
-    # Investigate issues
-    pass
-```
-
-## Error Handling Patterns
-
-### Pattern 1: Graceful Data Collection
-
-```python
-def update(self) -> bool:
+def _get_cpu_usage(self) -> float:
     try:
-        # Collect each metric separately
-        try:
-            cpu_load = manager.get_cpu_load()
-            cpu_load = self._validate_load_value(cpu_load, "CPU load")
-        except Exception as e:
-            logger.error(f"CPU load error: {e}")
-            cpu_load = 0.0  # Fallback
-        
-        try:
-            gpu_load = manager.get_gpu_load()
-            gpu_load = self._validate_load_value(gpu_load, "GPU load")
-        except Exception as e:
-            logger.error(f"GPU load error: {e}")
-            gpu_load = 0.0  # Fallback
-        
-        # Create snapshot with potentially partial data
-        snapshot = PerformanceSnapshot(...)
-        self._snapshots.append(snapshot)
-        
-        return True
+        cpu = psutil.cpu_percent(interval=None)
+        return max(0.0, min(100.0, cpu))
     
     except Exception as e:
-        logger.error(f"Update failed: {e}", exc_info=True)
-        return False
-```
-
-### Pattern 2: Data Validation
-
-```python
-def _validate_load_value(self, value: float, name: str) -> float:
-    try:
-        # Type check
-        if not isinstance(value, (int, float)):
-            logger.warning(f"Invalid {name} type: {type(value)}")
-            return 0.0
-        
-        # Range check
-        if value < 0 or value > 100:
-            logger.warning(f"Invalid {name} range: {value}")
-            return max(0.0, min(100.0, value))  # Clamp
-        
-        return float(value)
-    
-    except Exception as e:
-        logger.error(f"Validation error for {name}: {e}")
+        self._log_warning(f"CPU usage failed: {e}")
+        # Return last known value
+        if self._last_valid_metrics:
+            return self._last_valid_metrics.cpu
         return 0.0
 ```
 
-### Pattern 3: Safe Calculations
-
+**GPU Reading Failure:**
 ```python
-def _update_correlations(self):
+def _get_gpu_usage(self) -> float:
     try:
-        # Calculation
-        correlation = np.corrcoef(cpu_loads, fps_values)[0, 1]
+        if not GPU_AVAILABLE:
+            return 0.0
         
-        # Validate result
-        if not np.isnan(correlation) and not np.isinf(correlation):
-            self._cpu_fps_correlation = correlation
-    
-    except (ValueError, FloatingPointError, np.linalg.LinAlgError) as e:
-        logger.warning(f"Correlation error: {e}")
-        # Keep previous value
+        gpus = GPUtil.getGPUs()
+        if gpus:
+            return max(0.0, min(100.0, gpus[0].load * 100))
+        return 0.0
     
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        self._log_warning(f"GPU usage failed: {e}")
+        # Return last known value or 0
+        if self._last_valid_metrics:
+            return self._last_valid_metrics.gpu
+        return 0.0
 ```
 
-### Pattern 4: Fallback Values
+#### 2. Invalid Metrics
 
+**Validation:**
 ```python
-def get_performance_score(self) -> float:
-    try:
-        if not self._snapshots:
-            return 0.0  # No data
-        
-        # Calculate score
-        score = calculate_score()
-        self._last_score = score  # Save for fallback
-        return score
-    
-    except Exception as e:
-        logger.error(f"Score calculation failed: {e}")
-        return self._last_score  # Return last known score
+class PerformanceMetrics:
+    def is_valid(self) -> bool:
+        return (
+            0 <= self.cpu <= 100 and
+            0 <= self.gpu <= 100 and
+            0 <= self.ram <= 100 and
+            0 <= self.fps <= 500 and
+            0 <= self.cpu_temp <= 150 and
+            0 <= self.gpu_temp <= 150 and
+            0 <= self.score <= 100
+        )
 ```
 
-### Pattern 5: Status Reporting
-
+**Handling:**
 ```python
-def get_status(self) -> Dict[str, Any]:
-    try:
-        return {
-            'active': True,
-            'snapshot_count': len(self._snapshots),
-            'baseline_established': self._baseline_established,
-            'error_count': self._error_count,
-            'last_score': self._last_score,
-        }
-    except Exception as e:
-        logger.error(f"Status error: {e}")
-        return {'error': str(e)}
+if metrics and metrics.is_valid():
+    self._current_metrics = metrics
+    self._last_valid_metrics = metrics
+    self._consecutive_errors = 0
+else:
+    # Use last valid metrics
+    self._handle_invalid_metrics(metrics)
 ```
 
-## Testing
+#### 3. Worker Thread Errors
 
-### Test Invalid Data
-
+**Error Tracking:**
 ```python
-def test_invalid_load_values(self):
-    # Set invalid values
-    manager.cpu_load = 150  # Over 100
-    manager.gpu_load = -50  # Negative
+def _handle_worker_error(self, error: Exception):
+    now = time.time()
     
-    result = monitor.update()
-    self.assertTrue(result)  # Should handle gracefully
+    # Reset error count after cooldown
+    if now - self._last_error_time > 60.0:
+        self._error_count = 0
+    
+    self._error_count += 1
+    self._consecutive_errors += 1
+    self._last_error_time = now
+    
+    self._log_error(f"Worker error ({self._error_count}/{self._max_errors}): {error}")
+    
+    # Sleep longer after error
+    time.sleep(1.0)
 ```
 
-### Test Interface Errors
-
+**Automatic Shutdown:**
 ```python
-def test_manager_interface_error(self):
-    class ErrorManager:
-        def get_cpu_load(self):
-            raise Exception("Interface error!")
-    
-    monitor = PerformanceMonitor(ErrorManager(), bus)
-    result = monitor.update()
-    
-    # Should handle error
-    self.assertTrue(result)
+if self._consecutive_errors >= self._max_consecutive_errors:
+    self._log_error("Too many consecutive errors, stopping")
+    break
 ```
 
-### Test Insufficient Data
+#### 4. Callback Errors
 
+**Error Isolation:**
 ```python
-def test_score_without_data(self):
-    monitor = PerformanceMonitor(manager, bus)
-    score = monitor.get_performance_score()
-    self.assertEqual(score, 0.0)
+def _notify_callbacks(self, metrics: PerformanceMetrics):
+    for callback in self._callbacks:
+        try:
+            callback(metrics)
+        except Exception as e:
+            # Don't let one bad callback break others
+            self._log_error(f"Callback error: {e}", exc_info=True)
 ```
 
-### Test Recovery
+### Usage Examples
 
+**Basic Usage:**
 ```python
-def test_reset_recovery(self):
-    # Cause errors
-    for _ in range(5):
-        monitor.update()  # With errors
+# Create monitor
+monitor = PerformanceMonitor(interval=100)
+
+# Add callback
+def on_metrics(metrics: PerformanceMetrics):
+    print(f"CPU: {metrics.cpu}%, GPU: {metrics.gpu}%")
+
+monitor.add_callback(on_metrics)
+
+# Start monitoring
+if monitor.start():
+    print("Started successfully")
+else:
+    print("Failed to start")
+
+# Get current metrics
+metrics = monitor.get_current_metrics()
+if metrics:
+    print(f"Score: {metrics['score']}")
+
+# Stop
+monitor.stop()
+```
+
+**Error Recovery:**
+```python
+# Check status
+status = monitor.get_status()
+
+if status['consecutive_errors'] > 3:
+    print("Monitor experiencing errors, restarting...")
+    monitor.stop()
+    time.sleep(1)
+    monitor.start()
+```
+
+**Health Monitoring:**
+```python
+def check_health():
+    if not monitor.is_running():
+        print("Monitor not running!")
+        return False
     
-    # Reset
-    monitor.reset()
-    
-    # Check cleared
     status = monitor.get_status()
-    self.assertEqual(status['error_count'], 0)
+    
+    if status['error_count'] > 10:
+        print("Too many errors!")
+        return False
+    
+    if not status['has_metrics']:
+        print("No metrics available!")
+        return False
+    
+    return True
 ```
 
-## Best Practices
+### Error Recovery Strategies
 
-### DO
+#### 1. Automatic Recovery
 
-✅ **Validate all input data**
+**Last Known Value:**
+- Hardware reading fails → return last valid value
+- Prevents metric gaps
+- Smooth degradation
+
+**Error Cooldown:**
+- Reset error count after 60 seconds
+- Prevents permanent error state
+- Allows recovery from transient issues
+
+**Automatic Shutdown:**
+- Stop after too many consecutive errors
+- Prevents infinite error loops
+- Protects system resources
+
+#### 2. Manual Recovery
+
+**Restart Monitor:**
 ```python
-value = self._validate_load_value(value, "CPU load")
+def restart_monitor():
+    try:
+        monitor.stop()
+        time.sleep(1)
+        
+        if monitor.start():
+            print("Monitor restarted")
+            return True
+        else:
+            print("Restart failed")
+            return False
+    
+    except Exception as e:
+        print(f"Restart error: {e}")
+        return False
 ```
 
-✅ **Collect data in isolation**
+**Clear Error State:**
 ```python
-try:
-    cpu = manager.get_cpu_load()
-except Exception:
-    cpu = 0.0
-
-try:
-    gpu = manager.get_gpu_load()
-except Exception:
-    gpu = 0.0
+# Stop and create new instance
+old_monitor.stop()
+new_monitor = PerformanceMonitor(interval=100)
+new_monitor.start()
 ```
 
-✅ **Provide fallback values**
-```python
-if not snapshots:
-    return 0.0
+### Testing
 
-try:
-    return calculate()
-except Exception:
-    return last_known_value
+**Test Error Recovery:**
+```python
+def test_cpu_error_recovery(self):
+    with patch('psutil.cpu_percent') as mock_cpu:
+        # Simulate error
+        mock_cpu.side_effect = Exception("CPU error!")
+        
+        # Should not crash
+        cpu = monitor._get_cpu_usage()
+        
+        # Should return fallback
+        self.assertGreaterEqual(cpu, 0.0)
+```
+
+**Test Invalid Metrics:**
+```python
+def test_invalid_metrics(self):
+    metrics = PerformanceMetrics(
+        cpu=200.0,  # Invalid!
+        gpu=50.0,
+        ram=40.0,
+        fps=60.0,
+        cpu_temp=50.0,
+        gpu_temp=70.0,
+        score=85.0,
+        timestamp=time.time()
+    )
+    
+    # Should be rejected
+    self.assertFalse(metrics.is_valid())
+```
+
+**Test Callback Isolation:**
+```python
+def test_callback_isolation(self):
+    received = []
+    
+    def bad_callback(m):
+        raise Exception("Error!")
+    
+    def good_callback(m):
+        received.append(m)
+    
+    monitor.add_callback(bad_callback)
+    monitor.add_callback(good_callback)
+    
+    monitor.start()
+    time.sleep(0.5)
+    monitor.stop()
+    
+    # Good callback should still work
+    self.assertGreater(len(received), 0)
+```
+
+### Best Practices
+
+#### DO
+
+✅ **Validate all metrics**
+```python
+if metrics and metrics.is_valid():
+    self._process(metrics)
+else:
+    self._handle_invalid(metrics)
 ```
 
 ✅ **Track error frequency**
 ```python
-if error_count >= max_errors:
-    logger.error("Too many errors, disabling")
-    return False
+self._error_count += 1
+if self._error_count >= self._max_errors:
+    self.stop()
 ```
 
-✅ **Status reporting**
+✅ **Use last known values**
 ```python
-status = monitor.get_status()
-if status['error_count'] > 5:
-    investigate_issues()
-```
-
-### DON'T
-
-❌ **Don't fail on single metric error**
-```python
-# BAD
-cpu = manager.get_cpu_load()  # Crashes entire update!
-
-# GOOD
-try:
-    cpu = manager.get_cpu_load()
 except Exception as e:
-    logger.error(f"CPU load error: {e}")
-    cpu = 0.0  # Continue with fallback
+    if self._last_valid_metrics:
+        return self._last_valid_metrics.cpu
+    return 0.0
 ```
 
-❌ **Don't assume valid data**
+✅ **Isolate callback errors**
 ```python
-# BAD
-score = cpu / 100  # What if cpu is 500?
-
-# GOOD
-cpu = max(0, min(100, cpu))  # Clamp first
-score = cpu / 100
-```
-
-❌ **Don't ignore calculation errors**
-```python
-# BAD
-corr = np.corrcoef(a, b)[0, 1]  # Can raise or return NaN!
-
-# GOOD
-try:
-    corr = np.corrcoef(a, b)[0, 1]
-    if not np.isnan(corr):
-        self._correlation = corr
-except Exception as e:
-    logger.warning(f"Correlation error: {e}")
-```
-
-❌ **Don't return None on error**
-```python
-# BAD
-def get_score():
+for callback in self._callbacks:
     try:
-        return calculate()
+        callback(data)
     except Exception:
-        return None  # Caller must check for None!
+        # Log but continue
+        pass
+```
+
+#### DON'T
+
+❌ **Don't crash on hardware errors**
+```python
+# BAD
+cpu = psutil.cpu_percent()  # May fail!
 
 # GOOD
-def get_score() -> float:
-    try:
-        return calculate()
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        return 0.0  # Always return float
-```
-
-## Service Lifecycle
-
-### Initialization
-
-```python
 try:
-    monitor = PerformanceMonitor(manager, bus)
-    logger.info("Monitor initialized")
-except Exception as e:
-    logger.error(f"Initialization failed: {e}")
-    # Use fallback or disable feature
+    cpu = psutil.cpu_percent()
+except Exception:
+    cpu = last_known_value
 ```
 
-### Operation
-
+❌ **Don't accept invalid values**
 ```python
-while active:
+# BAD
+self._cpu = value  # No validation!
+
+# GOOD
+if 0 <= value <= 100:
+    self._cpu = value
+else:
+    log_warning("Invalid value")
+```
+
+❌ **Don't run indefinitely with errors**
+```python
+# BAD
+while True:
     try:
-        if not monitor.update():
-            logger.warning("Update failed")
-            # Could retry or pause
-        
-        time.sleep(interval)
-    
-    except Exception as e:
-        logger.error(f"Operation error: {e}")
-        # Decide: continue, retry, or stop
+        collect()  # Fails every time!
+    except:
+        pass  # Infinite error loop!
+
+# GOOD
+while self._error_count < max_errors:
+    try:
+        collect()
+    except:
+        self._error_count += 1
 ```
 
-### Shutdown
+### Monitoring State Machine
 
-```python
-try:
-    monitor.reset()
-    logger.info("Monitor shutdown complete")
-except Exception as e:
-    logger.error(f"Shutdown error: {e}")
-    # Still exit gracefully
+```
+STOPPED → STARTING → RUNNING → STOPPING → STOPPED
+            ↓
+          ERROR
 ```
 
-## Error Messages
+**State Transitions:**
+- STOPPED: Initial state, can be started
+- STARTING: Transitioning to running
+- RUNNING: Actively monitoring
+- STOPPING: Gracefully stopping
+- ERROR: Error occurred, must be restarted
 
-### For Logs (Technical)
+### Performance Metrics
 
-```python
-logger.error(
-    f"Failed to get {metric} from manager: {error}",
-    component="PerformanceMonitor",
-    exc_info=True
-)
-```
+**Update Rate:**
+- Interval: 10-5000ms (configurable)
+- Actual rate: ~90-95% of target
+- Variance: ±10ms typical
 
-**Include:**
-- Which metric/operation failed
-- Error details
-- Stack trace
-- Context (component name)
+**Error Rate:**
+- Target: <1 error per 1000 updates
+- Acceptable: <5 errors per 1000 updates
+- Critical: >10 consecutive errors
 
-### For Users (Friendly)
-
-```python
-show_notification(
-    "Performance monitoring unavailable",
-    "Some performance metrics cannot be collected. "
-    "Check logs for details."
-)
-```
-
-**Include:**
-- What's not working
-- Impact on functionality
-- Where to find details
+**Recovery Time:**
+- Single error: Immediate (next update)
+- Multiple errors: 1 second delay
+- Restart: 1-2 seconds
 
 ## See Also
 
 - [Core Error Handling](ERROR_HANDLING.md)
 - [Integration Error Handling](INTEGRATION_ERROR_HANDLING.md)
-- [UI Error Handling](UI_ERROR_HANDLING.md)
 - [Logging System](LOGGING.md)
