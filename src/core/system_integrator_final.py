@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """System Integrator Final - Complete system integration with REAL components
 
-Version: 0.3.5d_hotfix2 (package 3.9a, stage 7.7d_hotfix2)
+Version: 0.3.5d_hotfix3 (package 3.9a, stage 7.7d_hotfix3)
 
 Integrates all real components:
-- PerformanceMonitor (psutil/pynvml)
+- PerformanceMonitor (psutil/nvidia-ml-py)
 - GameDetector (process detection)
 - FSRManager (FSR 3.x library management)
 - DLLInjector (Windows DLL injection)
@@ -109,7 +109,7 @@ class SystemStatus:
 class SystemIntegratorFinal:
     """Complete system integration with REAL components
     
-    v0.3.5d_hotfix2 - Stage 7.7d: Real implementation + Game Profiles
+    v0.3.5d_hotfix3 - Stage 7.7d: Real implementation + Game Profiles
     
     Integrates:
     - Performance monitoring (CPU/GPU/RAM)
@@ -123,15 +123,19 @@ class SystemIntegratorFinal:
     - Configuration
     """
     
-    def __init__(self, config_path: str = 'config/settings.json'):
+    def __init__(self):
+        """Initialize system integrator
+        
+        Note: Managers are singletons - no config path needed
+        """
         self._initialized = False
         self._running = False
         self._start_time = 0.0
         
-        # Configuration
+        # Configuration (singleton - no args)
         self.config_manager = None
         if get_config_manager:
-            self.config_manager = get_config_manager(config_path)
+            self.config_manager = get_config_manager()
         
         # Infrastructure (Stage 7.7b)
         self.error_reporter = None
@@ -155,7 +159,7 @@ class SystemIntegratorFinal:
         if self._initialized:
             return True
         
-        print("Initializing PartMart Boost v0.3.5d_hotfix2...")
+        print("Initializing PartMart Boost v0.3.5d_hotfix3...")
         
         try:
             # Load configuration
@@ -374,7 +378,7 @@ class SystemIntegratorFinal:
         
         print("")
         print("=" * 60)
-        print("  PartMart Boost v0.3.5d_hotfix2 - System Status")
+        print("  PartMart Boost v0.3.5d_hotfix3 - System Status")
         print("  Stage 7.7d: FSR 3.x + Game Profiles")
         print("=" * 60)
         print(f"Initialized: {'Yes' if status.initialized else 'No'}")
@@ -418,7 +422,7 @@ class SystemIntegratorFinal:
 
 if __name__ == '__main__':
     # Test system integrator
-    print("Testing SystemIntegratorFinal v0.3.5d_hotfix2...")
+    print("Testing SystemIntegratorFinal v0.3.5d_hotfix3...")
     print("")
     
     integrator = SystemIntegratorFinal()

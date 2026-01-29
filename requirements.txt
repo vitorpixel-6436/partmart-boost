@@ -1,5 +1,5 @@
 # PartMart Boost Requirements
-# Version: 0.3.5d (Package 3.9a, Stage 7.7d)
+# Version: 0.3.5d_hotfix3 (Package 3.9a, Stage 7.7d_hotfix3)
 
 # GUI Framework
 PyQt6>=6.4.0
@@ -12,7 +12,8 @@ numpy>=1.24.0              # Required by pyqtgraph and data processing
 psutil>=5.9.0              # CPU, RAM, Disk monitoring
 
 # GPU monitoring (NVIDIA)
-pynvml>=11.5.0             # NVIDIA GPU monitoring
+# UPDATED: nvidia-ml-py is the official package (pynvml is deprecated)
+nvidia-ml-py>=12.535.133   # NVIDIA GPU monitoring (official)
 
 # Image processing (for FSR)
 Pillow>=10.0.0             # Image handling for FSR processing
