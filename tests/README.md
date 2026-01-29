@@ -1,200 +1,219 @@
-# PartMart Boost - Testing Guide
+# PartMart Boost Test Suite
 
-## Version: 0.3.5d_package3.6a.4
+**Version:** 0.3.5i (Package 3.9a, Stage 7.7a/7.7)
+
+## Overview
+
+Comprehensive test suite for PartMart Boost components.
 
 ## Running Tests
 
-### Full Test Suite
-
-Run all tests:
+### Run All Tests
 
 ```bash
-python tests/test_all_modules.py
+python tests/run_tests.py
 ```
 
-### Individual Module Tests
-
-Each module has its own test in the `__main__` block:
+### Verbose Output
 
 ```bash
-python src/core/fps_tracker.py
-python src/monitors/performance_monitor.py
-python src/framegen/generator.py
-python src/upscaler/upscaler.py
-python src/adaptive/thermal_manager_advanced.py
-python src/adaptive/power_manager_advanced.py
-python src/core/resource_manager.py
-python src/adaptive/system_integration.py
+python tests/run_tests.py -v
+```
+
+### Run Specific Test
+
+```bash
+python -m unittest tests.test_config_manager
+python -m unittest tests.test_data_bus
+python -m unittest tests.test_performance_history
+```
+
+### Run Single Test Method
+
+```bash
+python -m unittest tests.test_config_manager.TestConfigManager.test_get_default_value
 ```
 
 ## Test Coverage
 
-### Package 3.6a - Deep Bug Fixes
+### ConfigManager Tests (`test_config_manager.py`)
 
-#### Part 1: FPS & Performance (2/10 tasks)
-- ✅ FPS Tracker: Thread safety, buffer overflow, race conditions
-- ✅ Performance Monitor: Memory leaks, thread safety, resource cleanup
+- ✅ Default values
+- ✅ Get/Set operations
+- ✅ Type validation
+- ✅ Choice validation
+- ✅ Range validation
+- ✅ Subscriptions
+- ✅ Wildcard subscriptions
+- ✅ Save/Load
+- ✅ Reset functionality
+- ✅ Schema operations
 
-#### Part 2: Frame Processing (2/10 tasks)
-- ✅ Frame Generator: Pixel corruption, memory alignment, checksums
-- ✅ Upscaler: Aspect ratios, resolution edge cases, odd dimensions
+### DataBus Tests (`test_data_bus.py`)
 
-#### Part 3: Thermal & Power (3/10 tasks)
-- ✅ Thermal Manager: Oscillation prevention, sensor reliability, state stability
-- ✅ Power Manager: Battery detection, state synchronization, mode transitions
+- ✅ Publish/Subscribe
+- ✅ Multiple subscribers
+- ✅ Wildcard subscriptions
+- ✅ Message priority
+- ✅ Unsubscribe
+- ✅ Message history
+- ✅ Statistics
+- ✅ Clear history
 
-#### Part 4: Resource & State (3/10 tasks)
-- ✅ Resource Manager: Deadlock prevention, starvation prevention, fairness
-- ✅ State Machine: Transition validation, consistency checks
-- ✅ Event System: Queue overflow prevention, backpressure
+### PerformanceHistory Tests (`test_performance_history.py`)
 
-## Test Categories
+- ✅ Add snapshots
+- ✅ Get latest
+- ✅ Statistics calculation
+- ✅ Trend detection
+- ✅ Circular buffer
+- ✅ Get recent
+- ✅ Get all
+- ✅ Clear history
+- ✅ CSV export
 
-### Unit Tests
-- Individual module functionality
-- Edge case handling
-- Error conditions
-- Boundary values
+### PerformanceAnalytics Tests (`test_performance_analytics.py`)
 
-### Integration Tests
-- Module interactions
-- System-wide flows
-- Resource sharing
-- State synchronization
+- ✅ Analysis with no data
+- ✅ Normal load analysis
+- ✅ CPU bottleneck detection
+- ✅ GPU bottleneck detection
+- ✅ RAM bottleneck detection
+- ✅ Thermal throttling detection
+- ✅ Performance scoring
+- ✅ Efficiency calculation
+- ✅ Recommendation generation
+- ✅ Trend analysis
+- ✅ Severity classification
 
-### Stress Tests
-- Multi-threaded access
-- High load scenarios
-- Long-running stability
-- Resource exhaustion
+### MonitoringIntegration Tests (`test_monitoring_integration.py`)
 
-### Performance Tests
-- Throughput measurement
-- Latency tracking
-- Memory usage
-- CPU utilization
+- ✅ Initialization
+- ✅ Start/Stop
+- ✅ History recording
+- ✅ Analytics generation
+- ✅ DataBus publishing
+- ✅ Clear history
 
-## Expected Results
+## Mock Objects
 
-### FPS Tracker
-- FPS accuracy: ±5%
-- Thread-safe operation
-- No memory leaks
-- No race conditions
+### Available Mocks (`mock_objects.py`)
 
-### Performance Monitor
-- Metric collection: <1ms
-- Memory stable
-- Thread-safe
-- Clean shutdown
+- `MockPerformanceMonitor` - Mock performance monitor
+- `MockDataBus` - Mock data bus
+- `MockConfigManager` - Mock configuration manager
+- `MockQtSignals` - Mock Qt signals
 
-### Frame Generator
-- Interpolation accuracy
-- Memory alignment
-- Checksum validation
-- No pixel corruption
+### Using Mocks
 
-### Upscaler
-- Aspect ratio preservation
-- Resolution handling
-- Quality output
-- Performance acceptable
+```python
+from tests.mock_objects import MockPerformanceMonitor, MockDataBus
 
-### Thermal Manager
-- No oscillation
-- Smooth transitions
-- Accurate readings
-- Emergency shutdown
+# Create mocks
+monitor = MockPerformanceMonitor()
+bus = MockDataBus()
 
-### Power Manager
-- Battery detection
-- State synchronization
-- Mode switching
-- Debouncing
+# Set test data
+monitor.set_metrics(cpu=60, gpu=70)
 
-### Resource Manager
-- No deadlocks
-- Fair scheduling
-- No starvation
-- Clean cleanup
+# Use in tests
+integration = MonitoringIntegration(monitor=monitor, data_bus=bus)
+```
 
-### System Integration
-- Full initialization
-- Stable operation
-- Graceful shutdown
-- Error recovery
+## Writing New Tests
 
-## Bug Fixes Verified
+### Test Template
 
-### Critical Bugs Fixed: 40+
+```python
+import unittest
+import sys
+import os
 
-1. **Thread Safety**: 100%
-   - All race conditions eliminated
-   - Proper locking hierarchy
-   - Lock-free where possible
-   - Atomic operations
+# Add src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'core'))
 
-2. **Memory Safety**: 100%
-   - No memory leaks
-   - Proper alignment
-   - Bounds checking
-   - Resource cleanup
+from your_module import YourClass
 
-3. **Error Handling**: 100%
-   - All edge cases covered
-   - Graceful degradation
-   - Recovery strategies
-   - Clear error messages
+class TestYourClass(unittest.TestCase):
+    def setUp(self):
+        """Set up test fixtures"""
+        self.obj = YourClass()
+    
+    def tearDown(self):
+        """Clean up after tests"""
+        pass
+    
+    def test_something(self):
+        """Test something"""
+        result = self.obj.method()
+        self.assertEqual(result, expected)
 
-4. **Performance**: Optimized
-   - Efficient algorithms
-   - Cache-friendly
-   - Minimal overhead
-   - Scalable design
+if __name__ == '__main__':
+    unittest.main()
+```
+
+## Test Best Practices
+
+1. **One assertion per test** (when possible)
+2. **Descriptive test names** (`test_what_when_expected`)
+3. **Use setUp/tearDown** for common initialization
+4. **Test edge cases** (empty input, None, extremes)
+5. **Test error handling** (exceptions, invalid input)
+6. **Mock external dependencies**
+7. **Keep tests fast** (<1s per test)
+8. **Tests should be independent**
+
+## Continuous Integration
+
+### GitHub Actions (future)
+
+```yaml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run tests
+        run: python tests/run_tests.py
+```
+
+## Coverage Report (future)
+
+```bash
+# Install coverage
+pip install coverage
+
+# Run with coverage
+coverage run tests/run_tests.py
+
+# Generate report
+coverage report
+coverage html
+```
 
 ## Troubleshooting
 
-### Tests Fail to Import Modules
+### ImportError: No module named 'xyz'
 
-Make sure you're running from the repository root:
-
-```bash
-cd /path/to/partmart-boost
-python tests/test_all_modules.py
-```
-
-### NumPy Not Found
-
-Install dependencies:
+Make sure you're running from the project root:
 
 ```bash
-pip install -r requirements.txt
+cd partmart-boost
+python tests/run_tests.py
 ```
 
-### Test Timeouts
+### Tests fail with "File not found"
 
-Some tests simulate real-time behavior and may take time. This is expected.
+Some tests create temporary files. Make sure you have write permissions in `/tmp` or `%TEMP%`.
 
-### Memory Warnings
+### Mock objects not working
 
-Large frame buffers are allocated for testing. This is normal.
+Ensure `tests/` is in your Python path:
 
-## Contributing Tests
-
-When adding new features, always add tests:
-
-1. Unit test in module `__main__` block
-2. Integration test in `test_all_modules.py`
-3. Update this README with test description
-
-## Next Steps
-
-- Package 3.6b - Data & Memory Audit
-- Package 3.6c - Threading & Concurrency Audit
-- Package 3.6d - I/O & Resources Audit
-
----
-
-**Status**: Package 3.6a Complete ✅
-**Version**: 0.3.5d_package3.6a.4
-**Date**: 2026-01-28
+```python
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+```
