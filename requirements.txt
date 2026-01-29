@@ -1,6 +1,7 @@
 # PartMart Boost - Complete Dependencies
-# Version: 0.3.5d+patch6
-# Total: 57 packages (including sub-dependencies)
+# Version: 0.3.5d (package 3.9a, stage 2/3)
+# Updated: 2026-01-29
+# Total: 15 core + ~42 sub-dependencies = 57 packages
 
 # ==============================================================================
 # CORE DEPENDENCIES (Required)
@@ -10,10 +11,10 @@
 numpy>=1.21.0,<2.0.0
 scipy>=1.7.0
 
-# GUI Framework
-PyQt6>=6.4.0
-PyQt6-Qt6>=6.4.0
-PyQt6-sip>=13.4.0
+# GUI Framework (Updated for Package 3.9a)
+PyQt6>=6.6.0  # Updated from 6.4.0 for stability and Python 3.14+ support
+PyQt6-Qt6>=6.6.0
+PyQt6-sip>=13.6.0
 
 # ==============================================================================
 # SYSTEM MONITORING (Required for full functionality)
@@ -39,32 +40,42 @@ wmi>=1.5.1; sys_platform == 'win32'
 # ==============================================================================
 
 # Image processing library
-Pillow>=9.0.0
+Pillow>=10.0.0  # Updated for better compatibility
 
 # Computer vision and frame processing
 opencv-python>=4.8.0
+
+# ==============================================================================
+# NETWORKING & API (Package 3.8a/3.9a)
+# ==============================================================================
+
+# HTTP requests (for OptiScaler GitHub API)
+requests>=2.31.0
+
+# URL parsing
+urllib3>=2.0.0
 
 # ==============================================================================
 # UTILITIES
 # ==============================================================================
 
 # Type hints for older Python versions
-typing-extensions>=4.0.0
+typing-extensions>=4.5.0
 
 # Colored terminal output
 colorama>=0.4.6
 
 # Configuration file parsing
-pyyaml>=6.0
+pyyaml>=6.0.1
 
 # JSON schema validation
-jsonschema>=4.0.0
+jsonschema>=4.17.0
 
 # ==============================================================================
 # PERFORMANCE & OPTIMIZATION
 # ==============================================================================
 
-# Fast array operations
+# Fast array operations (Python < 3.12 only)
 numba>=0.56.0; python_version < '3.12'
 
 # Parallel processing
@@ -74,42 +85,47 @@ joblib>=1.2.0
 # OPTIONAL BUT RECOMMENDED
 # ==============================================================================
 
-# HTTP requests (for future updates check)
-requests>=2.28.0
+# Advanced visualization (commented out - install if needed)
+# matplotlib>=3.7.0
 
-# Plotting (for advanced visualization in future)
-# matplotlib>=3.5.0
-
-# Data analysis (for statistics)
-# pandas>=1.4.0
+# Data analysis (commented out - install if needed)
+# pandas>=2.0.0
 
 # ==============================================================================
-# DEVELOPMENT DEPENDENCIES (Optional)
+# DEVELOPMENT DEPENDENCIES (Optional - for developers)
 # ==============================================================================
 
-# Testing
-# pytest>=7.0.0
-# pytest-cov>=4.0.0
+# Testing framework
+# pytest>=7.4.0
+# pytest-cov>=4.1.0
+# pytest-qt>=4.2.0  # For Qt testing
 
 # Code quality
-# black>=22.0.0
-# flake8>=5.0.0
-# mypy>=0.990
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.4.0
 
 # ==============================================================================
-# NOTES
+# PACKAGE SUMMARY
 # ==============================================================================
 
-# Total packages (with sub-dependencies): ~57
+# Core packages: 15
+# With sub-dependencies: ~57 total
 #
-# Minimal install (testing only):
-#   pip install numpy PyQt6
+# Installation:
+#   Minimal (testing): pip install numpy PyQt6
+#   Full (recommended): pip install -r requirements.txt
 #
-# Full install (recommended):
-#   pip install -r requirements.txt
-#
-# Platform-specific:
-#   - wmi: Windows only (automatic)
-#   - numba: Python < 3.12 only (automatic)
+# Platform-specific (auto-handled by pip):
+#   - wmi: Windows only
+#   - numba: Python < 3.12 only
 #
 # Python version support: 3.8 - 3.15
+# PyQt6 compatibility: 6.4+ (6.6+ recommended)
+#
+# Package 3.9a Updates:
+#   - PyQt6 6.6.0 (from 6.4.0) - Better Python 3.14+ support
+#   - Pillow 10.0.0 (from 9.0.0) - Improved stability
+#   - typing-extensions 4.5.0 (from 4.0.0) - Better typing
+#   - requests 2.31.0 - For OptiScaler GitHub API
+#   - urllib3 2.0.0 - HTTP connection pooling

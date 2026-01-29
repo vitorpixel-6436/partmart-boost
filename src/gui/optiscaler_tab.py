@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """OptiScaler GUI Tab
 
-Version: 0.3.5d (package 3.8a, stage 5/6)
+Version: 0.3.5d (package 3.9a, stage 2/3)
+
+Package 3.9a Stage 2 Fixes:
+- Fixed thread safety (no concurrent installs)
+- Fixed QMessageBox imports
+- Added cancel functionality
+- Added proper thread cleanup
 """
 import sys
 from pathlib import Path
@@ -14,7 +20,7 @@ try:
         QSlider, QCheckBox, QLineEdit, QFileDialog,
         QMessageBox, QTextEdit
     )
-    from PyQt6.QtCore import Qt, QThread, pyqtSignal
+    from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMutex, QMutexLocker
 except ImportError:
     print("[OptiScalerTab] Warning: PyQt6 not available, using stubs")
     # Stubs for when PyQt6 not available
@@ -30,10 +36,15 @@ except ImportError:
     class QCheckBox: pass
     class QLineEdit: pass
     class QFileDialog: pass
-    class QMessageBox: pass
+    class QMessageBox: 
+        class StandardButton:
+            Yes = 1
+            No = 0
     class QTextEdit: pass
     class QThread: pass
     class pyqtSignal: pass
+    class QMutex: pass
+    class QMutexLocker: pass
     class Qt: 
         Horizontal = 1
         AlignCenter = 0
@@ -54,29 +65,42 @@ except ImportError:
 
 
 class InstallThread(QThread):
-    """Background thread for OptiScaler installation"""
+    """Background thread for OptiScaler installation
+    
+    Package 3.9a Stage 2: Thread-safe implementation
+    """
     progress = pyqtSignal(str, int)
     finished = pyqtSignal(bool, str)
     
     def __init__(self, manager: 'OptiScalerManager'):
         super().__init__()
         self.manager = manager
+        self._cancelled = False
     
     def run(self):
         """Run installation"""
         try:
             def progress_callback(status, percent):
+                if self._cancelled:
+                    return False  # Signal to stop
                 self.progress.emit(status, percent)
+                return True
             
             success = self.manager.install(progress_callback=progress_callback)
             
-            if success:
+            if self._cancelled:
+                self.finished.emit(False, "Installation cancelled")
+            elif success:
                 self.finished.emit(True, "OptiScaler installed successfully!")
             else:
                 self.finished.emit(False, "Installation failed")
         
         except Exception as e:
             self.finished.emit(False, f"Installation error: {e}")
+    
+    def cancel(self):
+        """Cancel installation"""
+        self._cancelled = True
 
 
 class OptiScalerTab(QWidget):
@@ -86,6 +110,11 @@ class OptiScalerTab(QWidget):
     - Installing/uninstalling OptiScaler
     - Configuring upscaler settings
     - Injecting into games
+    
+    Package 3.9a Stage 2 Fixes:
+    - Thread-safe installation
+    - No concurrent operations
+    - Proper cleanup
     """
     
     def __init__(self, parent=None):
@@ -94,6 +123,10 @@ class OptiScalerTab(QWidget):
         if not OPTISCALER_AVAILABLE:
             self._create_error_ui()
             return
+        
+        # STAGE 2 FIX: Thread safety
+        self._install_mutex = QMutex()
+        self._is_installing = False
         
         # Initialize manager
         self.manager = OptiScalerManager()
@@ -114,7 +147,7 @@ class OptiScalerTab(QWidget):
             "❌ OptiScaler module not available\n\n"
             "Please ensure the optiscaler package is installed."
         )
-        error_label.setAlignment(Qt.AlignCenter)
+        error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         error_label.setStyleSheet("color: red; font-size: 14px;")
         
         layout.addWidget(error_label)
@@ -157,6 +190,13 @@ class OptiScalerTab(QWidget):
         self.install_btn = QPushButton("Install OptiScaler")
         self.install_btn.clicked.connect(self._install_optiscaler)
         btn_layout.addWidget(self.install_btn)
+        
+        # STAGE 2: Added cancel button
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self._cancel_installation)
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setVisible(False)
+        btn_layout.addWidget(self.cancel_btn)
         
         self.uninstall_btn = QPushButton("Uninstall")
         self.uninstall_btn.clicked.connect(self._uninstall_optiscaler)
@@ -207,7 +247,7 @@ class OptiScalerTab(QWidget):
         # Sharpness slider
         sharpness_layout = QVBoxLayout()
         sharpness_layout.addWidget(QLabel("Sharpness:"))
-        self.sharpness_slider = QSlider(Qt.Horizontal)
+        self.sharpness_slider = QSlider(Qt.Orientation.Horizontal)
         self.sharpness_slider.setMinimum(0)
         self.sharpness_slider.setMaximum(100)
         self.sharpness_slider.setValue(50)
@@ -311,11 +351,31 @@ class OptiScalerTab(QWidget):
             self._log("OptiScaler not installed")
     
     def _install_optiscaler(self):
-        """Install OptiScaler"""
+        """Install OptiScaler
+        
+        Package 3.9a Stage 2 Fix:
+        - Check if already installing
+        - Thread-safe with mutex
+        """
+        # STAGE 2 FIX: Check if already installing
+        if self._is_installing:
+            QMessageBox.warning(
+                self,
+                "In Progress",
+                "Installation already in progress. Please wait."
+            )
+            return
+        
         self._log("Starting OptiScaler installation...")
         
-        # Disable buttons
+        # STAGE 2 FIX: Set flag with mutex
+        with QMutexLocker(self._install_mutex):
+            self._is_installing = True
+        
+        # Disable/enable buttons
         self.install_btn.setEnabled(False)
+        self.cancel_btn.setEnabled(True)
+        self.cancel_btn.setVisible(True)
         self.progress_bar.setVisible(True)
         self.progress_label.setVisible(True)
         self.progress_bar.setValue(0)
@@ -326,6 +386,16 @@ class OptiScalerTab(QWidget):
         self.install_thread.finished.connect(self._on_install_finished)
         self.install_thread.start()
     
+    def _cancel_installation(self):
+        """Cancel ongoing installation
+        
+        Package 3.9a Stage 2: Added cancel functionality
+        """
+        if self.install_thread and self.install_thread.isRunning():
+            self.install_thread.cancel()
+            self._log("⚠️ Cancelling installation...")
+            self.cancel_btn.setEnabled(False)
+    
     def _on_install_progress(self, status: str, percent: int):
         """Handle installation progress"""
         self.progress_label.setText(status)
@@ -333,9 +403,19 @@ class OptiScalerTab(QWidget):
         self._log(f"{status}: {percent}%")
     
     def _on_install_finished(self, success: bool, message: str):
-        """Handle installation completion"""
+        """Handle installation completion
+        
+        Package 3.9a Stage 2 Fix:
+        - Clear _is_installing flag
+        """
+        # STAGE 2 FIX: Clear flag with mutex
+        with QMutexLocker(self._install_mutex):
+            self._is_installing = False
+        
+        # Hide progress
         self.progress_bar.setVisible(False)
         self.progress_label.setVisible(False)
+        self.cancel_btn.setVisible(False)
         
         if success:
             QMessageBox.information(self, "Success", message)
@@ -347,15 +427,20 @@ class OptiScalerTab(QWidget):
             self.install_btn.setEnabled(True)
     
     def _uninstall_optiscaler(self):
-        """Uninstall OptiScaler"""
+        """Uninstall OptiScaler
+        
+        Package 3.9a Stage 2 Fix:
+        - Fixed QMessageBox.StandardButton
+        """
+        # STAGE 2 FIX: Use StandardButton
         reply = QMessageBox.question(
             self,
             "Confirm Uninstall",
             "Are you sure you want to uninstall OptiScaler?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self._log("Uninstalling OptiScaler...")
             
             if self.manager.uninstall():
@@ -453,10 +538,15 @@ class OptiScalerTab(QWidget):
             self._log("❌ Game detection failed")
     
     def _inject_optiscaler(self):
-        """Inject OptiScaler into game"""
+        """Inject OptiScaler into game
+        
+        Package 3.9a Stage 2 Fix:
+        - Fixed QMessageBox.StandardButton
+        """
         if not self.current_game:
             return
         
+        # STAGE 2 FIX: Use StandardButton
         reply = QMessageBox.question(
             self,
             "Confirm Injection",
@@ -465,10 +555,10 @@ class OptiScalerTab(QWidget):
             f"- Backup original DLLs\n"
             f"- Copy OptiScaler files\n"
             f"- Apply configuration",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self._log(f"Injecting into {self.current_game.name}...")
             
             try:
@@ -488,18 +578,23 @@ class OptiScalerTab(QWidget):
                 self._log(f"❌ Error: {e}")
     
     def _remove_optiscaler(self):
-        """Remove OptiScaler from game"""
+        """Remove OptiScaler from game
+        
+        Package 3.9a Stage 2 Fix:
+        - Fixed QMessageBox.StandardButton
+        """
         if not self.current_game:
             return
         
+        # STAGE 2 FIX: Use StandardButton
         reply = QMessageBox.question(
             self,
             "Confirm Removal",
             f"Remove OptiScaler from {self.current_game.name}?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self._log(f"Removing from {self.current_game.name}...")
             
             if self.manager.remove_from_game(self.current_game):
@@ -508,6 +603,27 @@ class OptiScalerTab(QWidget):
             else:
                 QMessageBox.critical(self, "Error", "Removal failed")
                 self._log("❌ Removal failed")
+    
+    def cleanup(self):
+        """Clean up resources
+        
+        Package 3.9a Stage 2: Added cleanup
+        """
+        try:
+            if self.install_thread and self.install_thread.isRunning():
+                self.install_thread.cancel()
+                self.install_thread.wait(1000)  # Wait 1 second
+                if self.install_thread.isRunning():
+                    self.install_thread.terminate()
+            
+            print("[OptiScalerTab] Cleaned up successfully")
+        except Exception as e:
+            print(f"[OptiScalerTab] Cleanup error: {e}")
+    
+    def closeEvent(self, event):
+        """Handle close event"""
+        self.cleanup()
+        event.accept()
     
     def _log(self, message: str):
         """Add message to log"""
