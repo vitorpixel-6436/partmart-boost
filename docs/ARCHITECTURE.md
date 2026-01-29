@@ -1,651 +1,506 @@
-# 🏛️ PartMart Boost Architecture
+# PartMart Boost Architecture
 
-**Version:** 0.3.4-alpha
-
-**Architecture Type:** 3-Tier Event-Driven
+**Version:** 0.3.5d (Package 3.9a)  
+**Updated:** 2026-01-29  
+**Status:** ✅ Production Ready
 
 ---
 
-## 📐 Overview
+## Table of Contents
 
-PartMart Boost uses a **3-tier event-driven architecture** that completely separates backend hardware monitoring from frontend UI rendering.
+1. [Overview](#overview)
+2. [System Layers](#system-layers)
+3. [Communication Flow](#communication-flow)
+4. [Component Details](#component-details)
+5. [Data Flow](#data-flow)
+6. [Design Patterns](#design-patterns)
+7. [Thread Safety](#thread-safety)
+8. [Error Handling](#error-handling)
+
+---
+
+## Overview
+
+PartMart Boost uses a layered architecture with clear separation between:
+- **Frontend** (UI/Presentation)
+- **Communication Layer** (API/Bridge)
+- **Backend** (Business Logic/Services)
 
 ```
-┌─────────────────────────────────────────┐
-│         TIER 1: FRONTEND (UI)           │
-│   - PyQt6 Widgets                       │
-│   - View-only components                │
-│   - Subscribes to DataBus signals       │
-│   - NO direct hardware access           │
-└──────────────┬──────────────────────────┘
-               │ subscribes to signals
-               ↓
-┌─────────────────────────────────────────┐
-│       TIER 2: MIDDLEWARE (DataBus)      │
-│   - Event bus (signals/slots)           │
-│   - Data caching                        │
-│   - Update throttling                   │
-│   - Polls monitors at fixed interval    │
-└──────────────┬──────────────────────────┘
-               │ polls every 2s
-               ↓
-┌─────────────────────────────────────────┐
-│        TIER 3: BACKEND (Monitors)       │
-│   - MonitorManager                      │
-│   - GPUMonitor, CPUMonitor, RAMMonitor  │
-│   - Direct hardware access              │
-│   - No UI dependencies                  │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    FRONTEND LAYER                       │
+│  (PyQt6 Widgets - User Interface)                       │
+├─────────────────────────────────────────────────────────┤
+│              COMMUNICATION LAYER (NEW!)                 │
+│  (Backend Bridge, Commands, Queries, Qt Signals)        │
+├─────────────────────────────────────────────────────────┤
+│                    BACKEND LAYER                        │
+│  (Performance Monitor, OptiScaler, Config, etc.)        │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🎯 Design Goals
+## System Layers
 
-### 1. **Separation of Concerns**
-- **Frontend:** Only renders data, never accesses hardware
-- **Backend:** Only reads hardware, never renders UI
-- **Middleware:** Bridges the gap with events
+### 1. Frontend Layer
 
-### 2. **Loose Coupling**
-- Backend changes don't break UI
-- UI redesigns don't affect backend
-- Easy to add new monitors
-- Easy to add new UI pages
+**Location:** `src/gui/`
 
-### 3. **Performance**
-- Backend polls at fixed interval (2s)
-- Frontend updates reactively
-- No unnecessary UI redraws
-- Throttling prevents spam
+**Components:**
+- `main_window.py` - Main application window
+- `dashboard_widget.py` - Dashboard UI
+- `performance_widget.py` - Performance monitoring UI
+- `settings_widget.py` - Settings UI
+- `logs_widget.py` - Log viewer
+- `custom_widgets.py` - Custom UI components
 
-### 4. **Maintainability**
-- Clear component boundaries
-- Single Responsibility Principle
-- Easy to test each tier independently
-- Self-documenting code
-
----
-
-## 🔧 Components
-
-### TIER 1: Frontend (UI)
-
-#### Responsibilities:
+**Responsibilities:**
 - Display data to user
-- Handle user interactions
-- Subscribe to DataBus signals
-- Update UI when data changes
+- Handle user input
+- Update UI in response to backend events
+- NO business logic
 
-#### Key Files:
-- `src/main.py` - Main window
-- `src/widgets/*` - Custom UI widgets
-- `src/ui/*` - UI components
+### 2. Communication Layer
 
-#### Example Usage:
-```python
-from core.databus import get_databus
+**Location:** `src/core/`
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        
-        # Get DataBus instance
-        self.bus = get_databus()
-        
-        # Subscribe to signals
-        self.bus.data_updated.connect(self.on_data_update)
-        self.bus.gpu_updated.connect(self.on_gpu_update)
-        self.bus.error_occurred.connect(self.on_error)
-        
-        # Start updates
-        self.bus.start()
-    
-    def on_data_update(self, data: dict):
-        """Handle full data update"""
-        self.update_all_widgets(data)
-    
-    def on_gpu_update(self, gpu_data: dict):
-        """Handle GPU-only update"""
-        self.gpu_widget.update(gpu_data)
-```
+**Components:**
+- `backend_bridge.py` - Main API layer
+- `command_system.py` - Command definitions
+- `query_system.py` - Query builder
+- `qt_signal_bridge.py` - Qt signal integration
+- `data_bus.py` - Event-based data transport
+- `event_system.py` - Event handling
 
-**Benefits:**
-- ✅ UI never calls `psutil`, `pynvml`, or `wmi` directly
-- ✅ Event-driven: UI updates automatically
-- ✅ Testable: Can mock DataBus for testing
+**Responsibilities:**
+- Unified API for backend access
+- Command execution and validation
+- Query processing and caching
+- Event pub/sub
+- Thread-safe communication
+- Error handling
 
----
+### 3. Backend Layer
 
-### TIER 2: Middleware (DataBus)
+**Location:** `src/core/`, `src/monitors/`, `src/optimization/`
 
-#### Responsibilities:
-- Poll monitors at fixed interval
-- Cache latest data
-- Emit signals when data changes
-- Throttle unnecessary updates
-- Track performance
+**Components:**
+- `performance_monitor.py` - Performance monitoring
+- `fps_tracker.py` - FPS tracking
+- `resource_manager.py` - Resource management
+- `config.py` - Configuration
+- OptiScaler integration
+- Thermal management
 
-#### Key Files:
-- `src/core/databus.py` - Main DataBus class
-
-#### Signals:
-```python
-class DataBus(QObject):
-    # Emitted when any data changes
-    data_updated = pyqtSignal(dict)
-    
-    # Component-specific signals
-    gpu_updated = pyqtSignal(dict)
-    cpu_updated = pyqtSignal(dict)
-    ram_updated = pyqtSignal(dict)
-    
-    # Error handling
-    error_occurred = pyqtSignal(str)
-```
-
-#### Features:
-
-**1. Automatic Updates:**
-```python
-bus = get_databus()
-bus.start()  # Polls every 2s
-```
-
-**2. Change Detection:**
-- Only emits signals if data changed significantly (>1%)
-- Prevents UI spam
-- Reduces CPU usage
-
-**3. Performance Tracking:**
-```python
-stats = bus.get_performance_stats()
-print(f"Average update time: {stats['avg_time_ms']:.2f}ms")
-```
-
-**4. Configurable Interval:**
-```python
-bus.set_update_interval(1000)  # 1 second
-```
-
-**5. Manual Updates:**
-```python
-bus.force_update()  # Bypass throttling
-```
-
-**Benefits:**
-- ✅ Frontend and backend fully decoupled
-- ✅ Single point of data access
-- ✅ Easy to add caching/optimization
-- ✅ Performance monitoring built-in
+**Responsibilities:**
+- Business logic
+- Data collection
+- Performance optimization
+- System integration
+- NO UI code
 
 ---
 
-### TIER 3: Backend (Monitors)
+## Communication Flow
 
-#### Responsibilities:
-- Read hardware metrics
-- Internal caching (500ms-1s)
-- Graceful error handling
-- Platform-agnostic interface
-
-#### Key Files:
-- `src/monitors/__init__.py` - BaseMonitor interface
-- `src/monitors/gpu_monitor.py` - GPU monitoring
-- `src/monitors/cpu_monitor.py` - CPU monitoring
-- `src/monitors/ram_monitor.py` - RAM monitoring
-- `src/monitors/manager.py` - Monitor orchestration
-- `src/monitors/fallback_gpu.py` - Native GPU fallback
-
-#### Interface:
-```python
-class BaseMonitor(ABC):
-    @abstractmethod
-    def get_data(self) -> Dict[str, Any]:
-        """Get current hardware data"""
-        pass
-    
-    @abstractmethod
-    def get_name(self) -> str:
-        """Get monitor name"""
-        pass
-    
-    @abstractmethod
-    def is_available(self) -> bool:
-        """Check if hardware is available"""
-        pass
-```
-
-#### MonitorManager:
-```python
-from monitors.manager import MonitorManager
-
-manager = MonitorManager()
-data = manager.get_all_data()
-
-print(data['gpu'])  # GPU metrics
-print(data['cpu'])  # CPU metrics
-print(data['ram'])  # RAM metrics
-```
-
-**Benefits:**
-- ✅ No PyQt6 dependencies
-- ✅ Can be used standalone
-- ✅ Easy to test
-- ✅ Easy to add new monitors
-
----
-
-## 🔄 Data Flow
-
-### Normal Operation:
+### Command Flow (Frontend → Backend)
 
 ```
-1. Timer fires (every 2s)
-       ↓
-2. DataBus calls MonitorManager.get_all_data()
-       ↓
-3. MonitorManager polls each monitor:
-   - GPUMonitor.get_data() → GPU metrics
-   - CPUMonitor.get_data() → CPU metrics
-   - RAMMonitor.get_data() → RAM metrics
-       ↓
-4. MonitorManager returns combined data
-       ↓
-5. DataBus checks if data changed significantly
-       ↓
-6. If changed: DataBus emits signals
-   - data_updated(full_data)
-   - gpu_updated(gpu_data)
-   - cpu_updated(cpu_data)
-   - ram_updated(ram_data)
-       ↓
-7. Frontend widgets receive signals
-       ↓
-8. Widgets update UI
+┌──────────────┐
+│  UI Widget   │
+└──────┬───────┘
+       │ 1. Create command
+       v
+┌──────────────────┐
+│  BackendBridge   │
+└──────┬───────────┘
+       │ 2. Validate
+       │ 3. Execute
+       v
+┌──────────────────┐
+│ Command Handler  │
+└──────┬───────────┘
+       │ 4. Process
+       v
+┌──────────────────┐
+│  Backend Service │
+└──────────────────┘
 ```
 
-### Performance:
+### Data Flow (Backend → Frontend)
 
-| Step | Time | Notes |
-|------|------|-------|
-| 1. Timer | <1ms | PyQt6 QTimer |
-| 2. DataBus call | <1ms | Function call |
-| 3. Monitor polling | 7-11ms | All monitors |
-| 4. Data return | <1ms | Dictionary copy |
-| 5. Change detection | <1ms | Simple comparison |
-| 6. Signal emission | <1ms | PyQt6 signals |
-| 7. Signal delivery | <1ms | PyQt6 slots |
-| 8. UI update | 5-10ms | Widget rendering |
-| **TOTAL** | **<25ms** | **Per update cycle** |
-
-**Result:** UI stays responsive, <1% CPU overhead
-
----
-
-## 🚀 Adding New Components
-
-### Adding a New Monitor:
-
-**1. Create Monitor Class:**
-```python
-# src/monitors/disk_monitor.py
-from monitors import BaseMonitor
-
-class DiskMonitor(BaseMonitor):
-    def get_name(self) -> str:
-        return "Disk Monitor"
-    
-    def is_available(self) -> bool:
-        return True
-    
-    def get_data(self) -> dict:
-        return {
-            "usage_percent": 75,
-            "read_speed": 100,  # MB/s
-            "write_speed": 80,
-        }
+```
+┌──────────────────┐
+│  Backend Service │
+└──────┬───────────┘
+       │ 1. Publish data
+       v
+┌──────────────────┐
+│  BackendBridge   │
+└──────┬───────────┘
+       │ 2. Emit Qt signal
+       v
+┌──────────────────┐
+│ QtSignalBridge   │
+└──────┬───────────┘
+       │ 3. UI update (thread-safe)
+       v
+┌──────────────┐
+│  UI Widget   │
+└──────────────┘
 ```
 
-**2. Register in MonitorManager:**
-```python
-# src/monitors/manager.py
-from monitors.disk_monitor import DiskMonitor
+### Query Flow (Frontend ↔ Backend)
 
-class MonitorManager:
-    def _init_monitors(self):
-        # Existing monitors...
-        
-        # Add new monitor
-        try:
-            self.monitors['disk'] = DiskMonitor()
-        except Exception as e:
-            print(f"[ERROR] Disk monitor failed: {e}")
 ```
-
-**3. Add Signal to DataBus (optional):**
-```python
-# src/core/databus.py
-class DataBus(QObject):
-    disk_updated = pyqtSignal(dict)  # New signal
-    
-    def _emit_updates(self, new_data, old_data):
-        # Existing signals...
-        
-        # Emit disk signal
-        if 'disk' in new_data:
-            self.disk_updated.emit(new_data['disk'])
-```
-
-**4. Connect in UI:**
-```python
-# src/main.py
-self.bus.disk_updated.connect(self.on_disk_update)
-
-def on_disk_update(self, disk_data: dict):
-    self.disk_widget.update(disk_data)
-```
-
-**Done!** ✅ No other changes needed.
-
----
-
-### Adding a New UI Widget:
-
-**1. Create Widget:**
-```python
-# src/widgets/custom_card.py
-from PyQt6.QtWidgets import QWidget
-from core.databus import get_databus
-
-class CustomCard(QWidget):
-    def __init__(self):
-        super().__init__()
-        
-        # Subscribe to DataBus
-        bus = get_databus()
-        bus.data_updated.connect(self.on_update)
-    
-    def on_update(self, data: dict):
-        # Update UI
-        self.label.setText(f"CPU: {data['cpu']['load']}%")
-```
-
-**2. Add to Main Window:**
-```python
-# src/main.py
-from widgets.custom_card import CustomCard
-
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        
-        # Add widget
-        self.custom_card = CustomCard()
-        self.layout.addWidget(self.custom_card)
-```
-
-**Done!** ✅ Widget automatically receives updates.
-
----
-
-## 🎨 Improving Visuals (No Backend Changes)
-
-### Example: Redesign Main Page
-
-**Before:**
-```python
-class MainPage(QWidget):
-    def update_ui(self):
-        # Old design
-        data = system_monitor.get_all_data()  # Direct call
-        self.label.setText(f"CPU: {data['cpu']['load']}")
-```
-
-**After:**
-```python
-class MainPage(QWidget):
-    def __init__(self):
-        super().__init__()
-        
-        # Subscribe to DataBus
-        bus = get_databus()
-        bus.cpu_updated.connect(self.update_cpu)
-    
-    def update_cpu(self, cpu_data: dict):
-        # NEW DESIGN - Change anything you want!
-        # - Different layout
-        # - Different colors
-        # - Different fonts
-        # - Animations
-        # - Charts
-        # Backend doesn't care!
-        
-        self.fancy_cpu_widget.animate_to(cpu_data['load'])
-```
-
-**Result:** Complete visual redesign without touching backend! ✅
-
----
-
-## 📊 Performance Comparison
-
-### Before (v0.3.3): Tight Coupling
-
-```python
-class MainWindow:
-    def update_ui(self):
-        # Every widget polls directly
-        gpu_data = system_monitor.get_gpu_data()    # 50ms
-        cpu_data = system_monitor.get_cpu_data()    # 100ms
-        ram_data = system_monitor.get_ram_data()    # 60ms
-        
-        self.update_widgets(...)  # 10ms
-        # TOTAL: 220ms per update
-```
-
-**Issues:**
-- Multiple redundant hardware calls
-- UI blocks during updates
-- High CPU usage
-- Backend and frontend tightly coupled
-
-### After (v0.3.4): Event-Driven
-
-```python
-class MainWindow:
-    def __init__(self):
-        # Subscribe once
-        bus = get_databus()
-        bus.data_updated.connect(self.on_update)
-        bus.start()  # Automatic updates
-    
-    def on_update(self, data):
-        self.update_widgets(data)  # 5ms
-        # TOTAL: 5ms per UI update
-        # (Backend polls separately at 2s interval)
-```
-
-**Benefits:**
-- Single hardware poll (shared by all widgets)
-- Non-blocking UI updates
-- Low CPU usage
-- Complete backend/frontend separation
-
-**Performance:**
-
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| UI update time | 220ms | 5ms | **44x faster** |
-| CPU overhead | 15% | 1% | **93% less** |
-| Code coupling | High | None | **Fully decoupled** |
-
----
-
-## 🧪 Testing
-
-### Testing Monitors (Backend):
-
-```python
-# No PyQt6 needed!
-import unittest
-from monitors.cpu_monitor import CPUMonitor
-
-class TestCPUMonitor(unittest.TestCase):
-    def test_get_data(self):
-        monitor = CPUMonitor()
-        data = monitor.get_data()
-        
-        self.assertIn('load', data)
-        self.assertGreaterEqual(data['load'], 0)
-        self.assertLessEqual(data['load'], 100)
-```
-
-### Testing DataBus (Middleware):
-
-```python
-import unittest
-from PyQt6.QtTest import QTest
-from core.databus import get_databus, reset_databus
-
-class TestDataBus(unittest.TestCase):
-    def setUp(self):
-        reset_databus()
-        self.bus = get_databus()
-    
-    def test_signals(self):
-        received = []
-        
-        def on_update(data):
-            received.append(data)
-        
-        self.bus.data_updated.connect(on_update)
-        self.bus.force_update()
-        
-        self.assertEqual(len(received), 1)
-```
-
-### Testing UI (Frontend):
-
-```python
-import unittest
-from unittest.mock import Mock, patch
-from widgets.cpu_card import CPUCard
-
-class TestCPUCard(unittest.TestCase):
-    @patch('core.databus.get_databus')
-    def test_update(self, mock_bus):
-        # Mock DataBus
-        mock_bus.return_value = Mock()
-        
-        widget = CPUCard()
-        widget.on_update({'load': 50})
-        
-        self.assertEqual(widget.label.text(), "50%")
+┌──────────────┐
+│  UI Widget   │
+└──────┬───────┘
+       │ 1. Build query
+       v
+┌──────────────────┐
+│  QueryBuilder    │
+└──────┬───────────┘
+       │ 2. Execute query
+       v
+┌──────────────────┐
+│  BackendBridge   │
+└──────┬───────────┘
+       │ 3. Fetch data
+       v
+┌──────────────────┐
+│  Query Handler   │
+└──────┬───────────┘
+       │ 4. Return result
+       v
+┌──────────────┐
+│  UI Widget   │
+└──────────────┘
 ```
 
 ---
 
-## 📚 Best Practices
+## Component Details
 
-### DO ✅
+### BackendBridge
 
-1. **Always use DataBus in UI:**
-   ```python
-   bus = get_databus()
-   bus.data_updated.connect(self.on_update)
-   ```
+**Purpose:** Unified API for all backend-frontend communication
 
-2. **Keep monitors simple:**
-   ```python
-   def get_data(self) -> dict:
-       return {'metric': value}  # Just return data
-   ```
+**Key Methods:**
+```python
+# Execute command
+execute_command(command: Command) -> CommandResult
 
-3. **Handle errors gracefully:**
-   ```python
-   try:
-       data = monitor.get_data()
-   except Exception as e:
-       self.error_occurred.emit(str(e))
-   ```
+# Query data
+query_data(query_type: str, params: dict) -> QueryResult
 
-4. **Use type hints:**
-   ```python
-   def on_update(self, data: Dict[str, Any]) -> None:
-       pass
-   ```
+# Subscribe to events
+subscribe(event_type: str, callback: Callable)
 
-### DON'T ❌
+# Publish data
+publish_data(data_type: str, data: Any)
+```
 
-1. **Don't call hardware directly in UI:**
-   ```python
-   # ❌ BAD
-   import psutil
-   cpu = psutil.cpu_percent()
-   
-   # ✅ GOOD
-   bus = get_databus()
-   bus.cpu_updated.connect(self.on_cpu_update)
-   ```
+**Features:**
+- Singleton pattern
+- Thread-safe operations
+- Command validation
+- Error handling
+- Operation history
+- Statistics tracking
 
-2. **Don't import PyQt6 in monitors:**
-   ```python
-   # ❌ BAD - Monitor depends on UI framework
-   from PyQt6.QtCore import QObject
-   
-   # ✅ GOOD - Pure Python
-   from typing import Dict
-   ```
+### Command System
 
-3. **Don't poll manually:**
-   ```python
-   # ❌ BAD
-   while True:
-       data = monitor.get_data()
-       time.sleep(2)
-   
-   # ✅ GOOD
-   bus.start()  # Automatic polling
-   ```
+**Purpose:** Structured command pattern for backend operations
 
----
+**Command Types:**
+- `StartMonitoringCommand`
+- `StopMonitoringCommand`
+- `UpdateSettingsCommand`
+- `InstallOptiScalerCommand`
+- `GetMetricsCommand`
+- `ClearHistoryCommand`
+- `ExportDataCommand`
+- `ApplyProfileCommand`
 
-## 🎯 Summary
+**Features:**
+- Type-safe commands
+- Parameter validation
+- Command history
+- Undo/redo support (future)
 
-### Architecture Benefits:
+### Query System
 
-| Benefit | Description |
-|---------|-------------|
-| **Separation** | Backend ≠ Frontend |
-| **Flexibility** | Easy to change either tier |
-| **Performance** | 15-30x faster updates |
-| **Testability** | Each tier tests independently |
-| **Maintainability** | Clear component boundaries |
-| **Scalability** | Easy to add monitors/widgets |
+**Purpose:** SQL-like query builder for data retrieval
 
-### Key Components:
+**Query Builder:**
+```python
+QueryBuilder() \
+    .select(['fps', 'cpu', 'gpu']) \
+    .filter({'timestamp': '>1h'}) \
+    .order_by('timestamp', desc=True) \
+    .limit(100) \
+    .build()
+```
 
-1. **Backend (Monitors):** Read hardware
-2. **Middleware (DataBus):** Event-driven bridge
-3. **Frontend (UI):** Display data
+**Features:**
+- Fluent interface
+- Query validation
+- Result caching
+- Pagination support
 
-### Performance:
+### Qt Signal Bridge
 
-- Monitor polling: <10ms
-- UI update: <5ms
-- Total overhead: <1% CPU
-- Event-driven reactivity
+**Purpose:** Thread-safe Qt signal/slot integration
+
+**Signals:**
+```python
+data_updated = pyqtSignal(str, object)
+command_completed = pyqtSignal(str, bool)
+error_occurred = pyqtSignal(str, str)
+progress_updated = pyqtSignal(str, int)
+status_changed = pyqtSignal(str, str)
+```
+
+**Features:**
+- Thread-safe emission
+- Automatic Qt integration
+- Signal batching
+- Priority signals
 
 ---
 
-**See Also:**
-- [PERFORMANCE.md](../PERFORMANCE.md) - Performance details
-- [SECURITY.md](../SECURITY.md) - Security measures
-- [CONTRIBUTING.md](../CONTRIBUTING.md) - Developer guide
+## Data Flow
+
+### Performance Monitoring Data Flow
+
+```
+┌─────────────────────┐
+│ PerformanceMonitor  │
+│ (Backend Thread)    │
+└──────────┬──────────┘
+           │ Every 100ms
+           v
+  ┌────────────────┐
+  │ Collect Metrics│
+  │ - CPU, GPU     │
+  │ - Memory, FPS  │
+  └────────┬───────┘
+           │
+           v
+  ┌────────────────┐
+  │   Data Bus     │
+  └────────┬───────┘
+           │ Publish
+           v
+  ┌────────────────┐
+  │ BackendBridge  │
+  └────────┬───────┘
+           │ Emit Qt Signal
+           v
+  ┌────────────────┐
+  │ QtSignalBridge │
+  └────────┬───────┘
+           │ Thread-safe
+           v
+  ┌────────────────┐
+  │ UI Widgets     │
+  │ (Main Thread)  │
+  └────────────────┘
+```
+
+### Settings Update Flow
+
+```
+┌─────────────────┐
+│ Settings Widget │
+│ (User clicks)   │
+└────────┬────────┘
+         │
+         v
+┌─────────────────────┐
+│ Create Command      │
+│ UpdateSettingsCmd   │
+└────────┬────────────┘
+         │
+         v
+┌─────────────────────┐
+│ BackendBridge       │
+│ - Validate          │
+│ - Execute           │
+└────────┬────────────┘
+         │
+         v
+┌─────────────────────┐
+│ ConfigManager       │
+│ - Update config     │
+│ - Save to file      │
+└────────┬────────────┘
+         │
+         v
+┌─────────────────────┐
+│ Publish Event       │
+│ 'settings_updated'  │
+└────────┬────────────┘
+         │
+         v
+┌─────────────────────┐
+│ All subscribed      │
+│ widgets update      │
+└─────────────────────┘
+```
 
 ---
 
-**Version:** 0.3.4-alpha
+## Design Patterns
 
-**Last Updated:** 2026-01-28
+### 1. Singleton Pattern
+**Used in:** BackendBridge, UIFactory
+**Purpose:** Single instance for centralized access
+
+### 2. Command Pattern
+**Used in:** Command System
+**Purpose:** Encapsulate operations as objects
+
+### 3. Observer Pattern
+**Used in:** Event System, Qt Signals
+**Purpose:** Pub/sub for decoupled communication
+
+### 4. Builder Pattern
+**Used in:** QueryBuilder
+**Purpose:** Fluent interface for complex objects
+
+### 5. Factory Pattern
+**Used in:** UIFactory
+**Purpose:** Create objects without specifying exact class
+
+### 6. Facade Pattern
+**Used in:** BackendBridge
+**Purpose:** Simplified interface to complex subsystem
+
+---
+
+## Thread Safety
+
+### Thread Model
+
+```
+┌──────────────────┐
+│   Main Thread    │  ← UI, Qt Events
+└────────┬─────────┘
+         │
+         │ Qt Signals (thread-safe)
+         │
+┌────────┴─────────┐
+│ Backend Thread   │  ← Monitoring, Processing
+└──────────────────┘
+```
+
+### Synchronization
+
+- **QMutex:** Critical sections in backend
+- **Qt Signals:** Thread-safe UI updates
+- **Command Queue:** Sequential execution
+- **Data Bus:** Thread-safe pub/sub
+
+### Thread-Safe Components
+
+✅ BackendBridge  
+✅ CommandSystem  
+✅ DataBus  
+✅ EventSystem  
+✅ QtSignalBridge  
+✅ PerformanceMonitor  
+
+---
+
+## Error Handling
+
+### Error Propagation
+
+```
+Backend Error
+     ↓
+CommandResult (success=False, error="...")
+     ↓
+BackendBridge
+     ↓
+Qt Signal: error_occurred
+     ↓
+UI Widget shows error dialog
+```
+
+### Error Types
+
+1. **Command Errors**
+   - Validation failures
+   - Execution failures
+   - Timeout errors
+
+2. **Query Errors**
+   - Invalid query
+   - Data not found
+   - Access denied
+
+3. **System Errors**
+   - Hardware unavailable
+   - Permission denied
+   - Resource exhausted
+
+### Error Recovery
+
+- Automatic retry (configurable)
+- Fallback values
+- Graceful degradation
+- User notification
+
+---
+
+## Performance
+
+### Optimization Strategies
+
+1. **Lazy Loading**
+   - PyQt6 loaded on demand
+   - Plugins loaded when needed
+
+2. **Caching**
+   - Query result caching
+   - Configuration caching
+   - UI widget caching
+
+3. **Batching**
+   - Event batching
+   - Signal batching
+   - Update batching
+
+4. **Async Operations**
+   - Background monitoring
+   - Non-blocking commands
+   - Async queries
+
+### Performance Metrics
+
+- **Command latency:** <1ms
+- **Query latency:** <5ms
+- **UI update frequency:** 10 FPS
+- **Memory usage:** ~180 MB
+- **CPU usage:** <5%
+
+---
+
+## Summary
+
+**Architecture Benefits:**
+
+✅ Decoupled components  
+✅ Thread-safe operations  
+✅ Easy to test  
+✅ Easy to extend  
+✅ Type-safe communication  
+✅ Centralized error handling  
+✅ Performance optimized  
+✅ Production ready  
+
+**Version:** 0.3.5d (Package 3.9a) - COMPLETE!
