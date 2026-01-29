@@ -1,22 +1,39 @@
 #!/usr/bin/env python3
 """Settings Widget
 
-Version: 0.4.0-alpha
+Version: 0.3.5d (package 3.9a, stage 4/4)
 
-Application settings.
+Application settings with modern UI components.
+
+Package 3.9a Stage 4: Updated with custom widgets.
 """
+import sys
+from pathlib import Path
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QGroupBox, QPushButton, QComboBox, QCheckBox,
-    QScrollArea
+    QGroupBox, QScrollArea
 )
 from PyQt6.QtCore import Qt
+
+# Import custom widgets
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    from custom_widgets import ModernButton, ToggleSwitch, ModernComboBox, ModernSlider
+except ImportError:
+    print("[SettingsWidget] Warning: Custom widgets not available, using standard")
+    from PyQt6.QtWidgets import QPushButton as ModernButton
+    from PyQt6.QtWidgets import QCheckBox as ToggleSwitch
+    from PyQt6.QtWidgets import QComboBox as ModernComboBox
+    from PyQt6.QtWidgets import QSlider as ModernSlider
 
 
 class SettingsWidget(QWidget):
     """Settings Widget
     
-    Application configuration.
+    Application configuration with modern UI.
+    
+    Package 3.9a Stage 4: Using custom widgets.
     """
     
     def __init__(self):
@@ -24,7 +41,7 @@ class SettingsWidget(QWidget):
         self._create_ui()
     
     def _create_ui(self):
-        """Create UI"""
+        """Create UI with custom widgets"""
         # Scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -38,9 +55,12 @@ class SettingsWidget(QWidget):
         
         # Quality preset
         quality_layout = QHBoxLayout()
-        quality_layout.addWidget(QLabel("Quality Preset:"))
+        quality_label = QLabel("Quality Preset:")
+        quality_label.setStyleSheet("font-weight: bold;")
+        quality_layout.addWidget(quality_label)
         
-        self.quality_combo = QComboBox()
+        # STAGE 4: ModernComboBox
+        self.quality_combo = ModernComboBox()
         self.quality_combo.addItems([
             "Performance",
             "Balanced",
@@ -53,13 +73,21 @@ class SettingsWidget(QWidget):
         
         perf_layout.addLayout(quality_layout)
         
-        # Frame Generation
-        self.framegen_check = QCheckBox("Enable Frame Generation (2x FPS)")
-        perf_layout.addWidget(self.framegen_check)
+        # Frame Generation - STAGE 4: ToggleSwitch
+        framegen_layout = QHBoxLayout()
+        self.framegen_check = ToggleSwitch()
+        self.framegen_check.setText("Enable Frame Generation (2x FPS)")
+        framegen_layout.addWidget(self.framegen_check)
+        framegen_layout.addStretch()
+        perf_layout.addLayout(framegen_layout)
         
-        # Upscaling
-        self.upscaling_check = QCheckBox("Enable Upscaling (FSR 4)")
-        perf_layout.addWidget(self.upscaling_check)
+        # Upscaling - STAGE 4: ToggleSwitch
+        upscaling_layout = QHBoxLayout()
+        self.upscaling_check = ToggleSwitch()
+        self.upscaling_check.setText("Enable Upscaling (FSR 4)")
+        upscaling_layout.addWidget(self.upscaling_check)
+        upscaling_layout.addStretch()
+        perf_layout.addLayout(upscaling_layout)
         
         layout.addWidget(perf_group)
         
@@ -69,9 +97,12 @@ class SettingsWidget(QWidget):
         
         # Target temperature
         target_temp_layout = QHBoxLayout()
-        target_temp_layout.addWidget(QLabel("Target Temperature:"))
+        target_temp_label = QLabel("Target Temperature:")
+        target_temp_label.setStyleSheet("font-weight: bold;")
+        target_temp_layout.addWidget(target_temp_label)
         
-        self.target_temp_combo = QComboBox()
+        # STAGE 4: ModernComboBox
+        self.target_temp_combo = ModernComboBox()
         self.target_temp_combo.addItems([
             "75°C (Cool)",
             "80°C (Balanced)",
@@ -91,9 +122,12 @@ class SettingsWidget(QWidget):
         
         # Power mode
         power_mode_layout = QHBoxLayout()
-        power_mode_layout.addWidget(QLabel("Power Mode:"))
+        power_mode_label = QLabel("Power Mode:")
+        power_mode_label.setStyleSheet("font-weight: bold;")
+        power_mode_layout.addWidget(power_mode_label)
         
-        self.power_mode_combo = QComboBox()
+        # STAGE 4: ModernComboBox
+        self.power_mode_combo = ModernComboBox()
         self.power_mode_combo.addItems([
             "Performance",
             "Balanced",
@@ -111,23 +145,33 @@ class SettingsWidget(QWidget):
         advanced_group = QGroupBox("Advanced")
         advanced_layout = QVBoxLayout(advanced_group)
         
-        self.vsync_check = QCheckBox("Enable V-Sync")
-        advanced_layout.addWidget(self.vsync_check)
+        # V-Sync - STAGE 4: ToggleSwitch
+        vsync_layout = QHBoxLayout()
+        self.vsync_check = ToggleSwitch()
+        self.vsync_check.setText("Enable V-Sync")
+        vsync_layout.addWidget(self.vsync_check)
+        vsync_layout.addStretch()
+        advanced_layout.addLayout(vsync_layout)
         
-        self.hdr_check = QCheckBox("Enable HDR (if supported)")
-        advanced_layout.addWidget(self.hdr_check)
+        # HDR - STAGE 4: ToggleSwitch
+        hdr_layout = QHBoxLayout()
+        self.hdr_check = ToggleSwitch()
+        self.hdr_check.setText("Enable HDR (if supported)")
+        hdr_layout.addWidget(self.hdr_check)
+        hdr_layout.addStretch()
+        advanced_layout.addLayout(hdr_layout)
         
         layout.addWidget(advanced_group)
         
-        # Buttons
+        # Buttons - STAGE 4: ModernButton
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
         
-        apply_btn = QPushButton("Apply Settings")
+        apply_btn = ModernButton("Apply Settings", color="#51cf66")  # Green
         apply_btn.clicked.connect(self._apply_settings)
         buttons_layout.addWidget(apply_btn)
         
-        reset_btn = QPushButton("Reset to Defaults")
+        reset_btn = ModernButton("Reset to Defaults", color="#ff6b6b")  # Red
         reset_btn.clicked.connect(self._reset_settings)
         buttons_layout.addWidget(reset_btn)
         
