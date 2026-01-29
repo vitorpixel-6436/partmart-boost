@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """System Initialization
 
-Version: 0.3.5e (package 3.9a, stage 7.2/7.7)
+Version: 0.3.5f (package 3.9a, stage 7.4/7.7)
 
 System initialization manager for proper startup sequence.
 
-Package 3.9a Stage 7.2: Backend services integration.
+Package 3.9a Stage 7.4: DataBus integration.
 
 Features:
 - Dependency validation
 - Component initialization
 - Backend services integration
+- DataBus pub/sub system (NEW)
 - Error recovery
 - Health checks
 """
@@ -39,16 +40,18 @@ class SystemInitializer:
     
     Manages proper initialization of all system components.
     
-    Initialization Order:
+    Initialization Order (Stage 7.4):
     1. Check dependencies
     2. Initialize BackendBridge
     3. Create QtSignalBridge
-    4. Initialize BackendServiceManager (NEW in Stage 7.2)
-    5. Register command handlers
-    6. Register query handlers
-    7. Start monitoring
-    8. Create AppIntegrator
-    9. Ready for UI
+    4. Initialize DataBus (NEW)
+    5. Create DataBusIntegration (NEW)
+    6. Initialize BackendServiceManager
+    7. Register command handlers
+    8. Register query handlers
+    9. Start monitoring
+    10. Create AppIntegrator
+    11. Ready for UI
     
     Usage:
         init = SystemInitializer()
@@ -69,6 +72,8 @@ class SystemInitializer:
         self.results: List[InitResult] = []
         self._integrator = None
         self._service_manager = None
+        self._data_bus = None
+        self._bus_integration = None
         
         print(f"[SystemInit] Mode: {mode}")
     
@@ -120,14 +125,21 @@ class SystemInitializer:
                     time_ms=(time.perf_counter() - start_time) * 1000
                 )
             
-            # Step 4: Initialize backend services (NEW in Stage 7.2)
+            # Step 4: Initialize DataBus (NEW in Stage 7.4)
+            bus_result = self._init_data_bus()
+            self.results.append(bus_result)
+            
+            if not bus_result.success:
+                print(f"[SystemInit] ⚠️ DataBus failed (non-critical)")
+            
+            # Step 5: Initialize backend services
             services_result = self._init_backend_services()
             self.results.append(services_result)
             
             if not services_result.success:
                 print(f"[SystemInit] ⚠️ Backend services failed (non-critical)")
             
-            # Step 5: Create AppIntegrator
+            # Step 6: Create AppIntegrator
             integrator_result = self._create_integrator()
             self.results.append(integrator_result)
             
@@ -307,8 +319,66 @@ class SystemInitializer:
                 time_ms=(time.perf_counter() - start_time) * 1000
             )
     
+    def _init_data_bus(self) -> InitResult:
+        """Initialize DataBus (Stage 7.4)"""
+        start_time = time.perf_counter()
+        warnings = []
+        
+        print("[SystemInit] Initializing DataBus...")
+        
+        try:
+            from data_bus import DataBus
+            from data_bus_integration import DataBusIntegration
+            from backend_bridge import BackendBridge
+            from qt_signal_bridge import QtSignalBridge
+            
+            # Create DataBus
+            self._data_bus = DataBus(max_history=1000)
+            
+            # Create integration
+            bridge = BackendBridge.get_instance()
+            qt_signals = bridge.get_qt_signals()
+            
+            self._bus_integration = DataBusIntegration(
+                bridge=bridge,
+                bus=self._data_bus,
+                qt_signals=qt_signals
+            )
+            
+            # Start integration
+            self._bus_integration.start()
+            
+            print("[SystemInit] ✅ DataBus initialized")
+            
+            return InitResult(
+                success=True,
+                component='data_bus',
+                warnings=warnings,
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
+        
+        except ImportError as e:
+            warnings.append(f"DataBus unavailable: {e}")
+            
+            print(f"[SystemInit] ⚠️ DataBus unavailable: {e}")
+            
+            return InitResult(
+                success=False,
+                component='data_bus',
+                warnings=warnings,
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
+        
+        except Exception as e:
+            return InitResult(
+                success=False,
+                component='data_bus',
+                error=str(e),
+                time_ms=(time.perf_counter() - start_time) * 1000
+            )
+    
     def _init_backend_services(self) -> InitResult:
-        """Initialize backend services (Stage 7.2)"""
+        """Initialize backend services"""
         start_time = time.perf_counter()
         warnings = []
         
@@ -377,6 +447,10 @@ class SystemInitializer:
             if self._service_manager:
                 self._integrator.set_service_manager(self._service_manager)
             
+            # Set DataBus if available (NEW in Stage 7.4)
+            if self._data_bus:
+                self._integrator.set_data_bus(self._data_bus)
+            
             print("[SystemInit] ✅ AppIntegrator created")
             
             return InitResult(
@@ -402,12 +476,28 @@ class SystemInitializer:
         return self._integrator
     
     def get_service_manager(self):
-        """Get BackendServiceManager instance (Stage 7.2)
+        """Get BackendServiceManager instance
         
         Returns:
             BackendServiceManager instance or None
         """
         return self._service_manager
+    
+    def get_data_bus(self):
+        """Get DataBus instance (Stage 7.4)
+        
+        Returns:
+            DataBus instance or None
+        """
+        return self._data_bus
+    
+    def get_bus_integration(self):
+        """Get DataBusIntegration instance (Stage 7.4)
+        
+        Returns:
+            DataBusIntegration instance or None
+        """
+        return self._bus_integration
     
     def get_results(self) -> List[InitResult]:
         """Get initialization results
