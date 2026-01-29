@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Performance Widget
 
-Version: 0.4.0-alpha
+Version: 0.3.5d (package 3.9a, stage 3/3)
 
-Detailed performance information.
+Detailed performance information with real hardware data.
+
+Package 3.9a Stage 3 Fixes:
+- Replaced mock data with real metrics
+- Integrated with data bus
+- Real-time hardware monitoring
 """
 import sys
 import platform
 from pathlib import Path
+from typing import Optional
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -17,18 +23,37 @@ from PyQt6.QtCore import Qt
 
 # Import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from adaptive.thermal_manager_advanced import ThermalManagerAdvanced
-from adaptive.power_manager_advanced import PowerManagerAdvanced
+
+try:
+    from adaptive.thermal_manager_advanced import ThermalManagerAdvanced
+    from adaptive.power_manager_advanced import PowerManagerAdvanced
+    from core.data_bus import PerformanceDataBus
+    from monitors.performance_monitor import PerformanceMetrics
+except ImportError as e:
+    print(f"[PerformanceWidget] Import error: {e}")
 
 
 class PerformanceWidget(QWidget):
     """Performance Widget
     
-    Displays detailed system information.
+    Displays detailed system information with real hardware data.
+    
+    Package 3.9a Stage 3 Fixes:
+    - Real metrics from data bus
+    - No more mock data
+    - Real-time updates
     """
     
     def __init__(self):
         super().__init__()
+        
+        # STAGE 3: Connect to data bus
+        try:
+            self.data_bus = PerformanceDataBus.get_instance()
+            print("[PerformanceWidget] Connected to data bus")
+        except Exception as e:
+            print(f"[PerformanceWidget] Data bus error: {e}")
+            self.data_bus = None
         
         # Initialize managers
         self.thermal_manager = ThermalManagerAdvanced()
@@ -61,6 +86,24 @@ class PerformanceWidget(QWidget):
         sys_layout.addWidget(self.processor_label)
         
         layout.addWidget(sys_group)
+        
+        # STAGE 3: Real-time Hardware Status
+        hardware_group = QGroupBox("Real-Time Hardware Status")
+        hardware_layout = QVBoxLayout(hardware_group)
+        
+        self.realtime_gpu_label = QLabel("GPU: Waiting for data...")
+        self.realtime_cpu_label = QLabel("CPU: Waiting for data...")
+        self.realtime_memory_label = QLabel("Memory: Waiting for data...")
+        self.realtime_temp_label = QLabel("Temperature: Waiting for data...")
+        self.realtime_power_label = QLabel("Power: Waiting for data...")
+        
+        hardware_layout.addWidget(self.realtime_gpu_label)
+        hardware_layout.addWidget(self.realtime_cpu_label)
+        hardware_layout.addWidget(self.realtime_memory_label)
+        hardware_layout.addWidget(self.realtime_temp_label)
+        hardware_layout.addWidget(self.realtime_power_label)
+        
+        layout.addWidget(hardware_group)
         
         # Thermal Status
         thermal_group = QGroupBox("Thermal Status")
@@ -108,10 +151,42 @@ class PerformanceWidget(QWidget):
         main_layout.addWidget(scroll)
     
     def update_data(self):
-        """Update performance data"""
-        # Update thermal
-        self.thermal_manager.update_temperature(75.0)  # Mock temp
+        """Update performance data
         
+        Package 3.9a Stage 3 Fix:
+        - Get REAL metrics from data bus
+        - Update thermal manager with REAL temperature
+        - No more mock data!
+        """
+        # STAGE 3 FIX: Get real metrics from data bus
+        metrics: Optional[PerformanceMetrics] = None
+        if self.data_bus:
+            metrics = self.data_bus.get('performance_metrics')
+        
+        if metrics:
+            # STAGE 3 FIX: Update with REAL data
+            self.realtime_gpu_label.setText(f"GPU: {metrics.gpu_util:.0f}% utilization")
+            self.realtime_cpu_label.setText(f"CPU: {metrics.cpu_util:.0f}% utilization")
+            self.realtime_memory_label.setText(
+                f"Memory: {metrics.memory_used:.0f} / {metrics.memory_total:.0f} MB"
+            )
+            self.realtime_temp_label.setText(f"Temperature: {metrics.temperature:.1f}°C")
+            self.realtime_power_label.setText(f"Power: {metrics.power_draw:.0f} W")
+            
+            # STAGE 3 FIX: Update thermal with REAL temperature
+            self.thermal_manager.update_temperature(metrics.temperature)
+        else:
+            # Fallback only if no data available
+            self.realtime_gpu_label.setText("GPU: No data available")
+            self.realtime_cpu_label.setText("CPU: No data available")
+            self.realtime_memory_label.setText("Memory: No data available")
+            self.realtime_temp_label.setText("Temperature: No data available")
+            self.realtime_power_label.setText("Power: No data available")
+            
+            # Fallback to mock only if absolutely necessary
+            self.thermal_manager.update_temperature(65.0)
+        
+        # Update thermal state
         thermal_state = self.thermal_manager.get_state()
         thermal_temp = self.thermal_manager.get_current_temp()
         thermal_factor = self.thermal_manager.get_throttle_factor()

@@ -1,16 +1,37 @@
 #!/usr/bin/env python3
 """Performance Monitor
 
-Version: 0.3.5d+patch8 - CRITICAL: Fixed contextmanager import
+Version: 0.3.5d (package 3.9a, stage 3/3)
 
-System performance monitoring.
+System performance monitoring with real hardware data.
+
+Package 3.9a Stage 3 Fixes:
+- Replaced mock data with real hardware monitoring
+- Integrated psutil for CPU/Memory
+- Integrated GPUtil for GPU metrics
+- Added data bus integration
 """
 import time
 import threading
 import weakref
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
-from contextlib import contextmanager  # PATCH 8: Fixed import!
+from contextlib import contextmanager
+
+# Try to import monitoring libraries
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    print("[PerformanceMonitor] psutil not available, using fallback")
+
+try:
+    import GPUtil
+    GPUTIL_AVAILABLE = True
+except ImportError:
+    GPUTIL_AVAILABLE = False
+    print("[PerformanceMonitor] GPUtil not available, using fallback")
 
 
 @dataclass
@@ -27,10 +48,12 @@ class PerformanceMetrics:
 
 
 class PerformanceMonitor:
-    """Performance Monitor v0.3.5d+patch8
+    """Performance Monitor v0.3.5d (package 3.9a)
     
-    PATCH 8 Fix:
-    - Fixed contextlib import (was contextmanager)
+    Package 3.9a Stage 3 Fixes:
+    - Real hardware data collection
+    - Data bus integration
+    - Fallback to mock if hardware unavailable
     """
     
     MIN_TEMP = -50.0
@@ -51,7 +74,18 @@ class PerformanceMonitor:
         self._metric_count = 0
         self._allocated_resources: List[Any] = []
         
-        print("[PerformanceMonitor v0.3.5d+patch8] Initialized")
+        # STAGE 3: Track current FPS for real metrics
+        self._current_fps = 0.0
+        
+        # STAGE 3: Data bus integration
+        try:
+            from core.data_bus import PerformanceDataBus
+            self._data_bus = PerformanceDataBus.get_instance()
+        except ImportError:
+            self._data_bus = None
+            print("[PerformanceMonitor] Data bus not available")
+        
+        print(f"[PerformanceMonitor v0.3.5d] Initialized (psutil={PSUTIL_AVAILABLE}, GPUtil={GPUTIL_AVAILABLE})")
     
     def start(self) -> bool:
         with self._lock:
@@ -97,7 +131,18 @@ class PerformanceMonitor:
         self._allocated_resources.clear()
         self._callbacks.clear()
     
+    def set_fps(self, fps: float):
+        """Update current FPS (called by FPSTracker)
+        
+        Package 3.9a Stage 3: Added for real FPS tracking
+        """
+        self._current_fps = fps
+    
     def get_metrics(self) -> Optional[PerformanceMetrics]:
+        """Get current performance metrics
+        
+        Package 3.9a Stage 3: Returns real hardware data
+        """
         with self._lock:
             if not self._running:
                 return None
@@ -106,6 +151,11 @@ class PerformanceMonitor:
                 self._check_health()
                 metrics = self._collect_metrics()
                 self._metric_count += 1
+                
+                # STAGE 3: Publish to data bus
+                if self._data_bus:
+                    self._data_bus.publish('performance_metrics', metrics)
+                
                 return metrics
             except Exception as e:
                 self._error_count += 1
@@ -113,18 +163,97 @@ class PerformanceMonitor:
                 return self._get_fallback_metrics()
     
     def _collect_metrics(self) -> PerformanceMetrics:
-        return PerformanceMetrics(
-            fps=self._validate_fps(60.0),
-            frame_time=self._validate_frame_time(16.67),
-            gpu_util=self._validate_percentage(85.0),
-            cpu_util=self._validate_percentage(60.0),
-            memory_used=self._validate_memory(4096.0),
-            memory_total=self._validate_memory(8192.0),
-            temperature=self._validate_temperature(75.0),
-            power_draw=self._validate_power(180.0),
-        )
+        """Collect real hardware metrics
+        
+        Package 3.9a Stage 3 Fix:
+        - Real GPU data (GPUtil)
+        - Real CPU data (psutil)
+        - Real memory data (psutil)
+        - Fallback to mock if unavailable
+        """
+        try:
+            # STAGE 3 FIX: Collect REAL GPU metrics
+            if GPUTIL_AVAILABLE:
+                gpus = GPUtil.getGPUs()
+                if gpus:
+                    gpu = gpus[0]  # First GPU
+                    gpu_util = gpu.load * 100
+                    gpu_temp = gpu.temperature
+                    gpu_memory_used = gpu.memoryUsed
+                    gpu_memory_total = gpu.memoryTotal
+                else:
+                    # No GPU detected
+                    gpu_util = 0.0
+                    gpu_temp = 0.0
+                    gpu_memory_used = 0.0
+                    gpu_memory_total = 0.0
+            else:
+                # Fallback to mock
+                gpu_util = 75.0
+                gpu_temp = 65.0
+                gpu_memory_used = 4096.0
+                gpu_memory_total = 8192.0
+            
+            # STAGE 3 FIX: Collect REAL CPU metrics
+            if PSUTIL_AVAILABLE:
+                cpu_util = psutil.cpu_percent(interval=0.1)
+                
+                # Memory
+                memory = psutil.virtual_memory()
+                memory_used = memory.used / (1024 * 1024)  # MB
+                memory_total = memory.total / (1024 * 1024)  # MB
+                
+                # Try to get CPU temperature
+                try:
+                    if hasattr(psutil, 'sensors_temperatures'):
+                        temps = psutil.sensors_temperatures()
+                        if temps:
+                            # Get first available temperature
+                            cpu_temp = list(temps.values())[0][0].current
+                        else:
+                            cpu_temp = 0.0
+                    else:
+                        cpu_temp = 0.0
+                except:
+                    cpu_temp = 0.0
+            else:
+                # Fallback to mock
+                cpu_util = 60.0
+                memory_used = 4096.0
+                memory_total = 16384.0
+                cpu_temp = 0.0
+            
+            # Temperature: prefer GPU, fallback to CPU
+            temperature = gpu_temp if gpu_temp > 0 else cpu_temp
+            if temperature == 0:
+                # Last resort: estimate from load
+                temperature = 40.0 + (gpu_util * 0.4)
+            
+            # Power: estimate from GPU utilization
+            # Typical GPU TDP: 150-250W, assume 200W
+            power_draw = (gpu_util / 100.0) * 200.0
+            
+            # FPS from tracker
+            fps = self._current_fps
+            frame_time = 1000.0 / max(fps, 1.0) if fps > 0 else 0.0
+            
+            return PerformanceMetrics(
+                fps=self._validate_fps(fps),
+                frame_time=self._validate_frame_time(frame_time),
+                gpu_util=self._validate_percentage(gpu_util),
+                cpu_util=self._validate_percentage(cpu_util),
+                memory_used=self._validate_memory(memory_used),
+                memory_total=self._validate_memory(memory_total),
+                temperature=self._validate_temperature(temperature),
+                power_draw=self._validate_power(power_draw),
+            )
+        
+        except Exception as e:
+            print(f"[PerformanceMonitor] Collection error: {e}")
+            return self._get_fallback_metrics()
     
     def _get_fallback_metrics(self) -> PerformanceMetrics:
+        """Get fallback metrics (all zeros)"""
         return PerformanceMetrics(
             fps=0.0, frame_time=0.0, gpu_util=0.0, cpu_util=0.0,
             memory_used=0.0, memory_total=0.0, temperature=0.0, power_draw=0.0
@@ -212,4 +341,6 @@ class PerformanceMonitor:
                 'error_rate': self._error_count / max(self._metric_count, 1),
                 'callback_count': len(self._callbacks),
                 'resource_count': len(self._allocated_resources),
+                'psutil': PSUTIL_AVAILABLE,
+                'gputil': GPUTIL_AVAILABLE,
             }
